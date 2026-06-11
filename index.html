@@ -803,6 +803,35 @@ function computeCup() {
   return totals;
 }
 
+// Round 5 pairing is dynamic: after Round 4, the cup leader partners 4th place
+// and 2nd partners 3rd. Recomputed on every render until R5 scoring starts,
+// then frozen. Deterministic on every device, so sync can't ping-pong.
+function syncDynamicPairing() {
+  const r5 = state.rounds.find(r => r.id === "r5");
+  if (!r5) return;
+  const started =
+    ["p0","p1","p2","p3"].some(k => r5.scores[k].some(v => v != null)) ||
+    ["t1","t2"].some(k => r5.teamScores[k].some(v => v != null));
+  if (started) return;
+  const totals = [0,1,2,3].map(i => ({ i, points: 0, stableford: 0, birdies: 0 }));
+  state.rounds.filter(r => ["r1","r2","r3","r4"].includes(r.id)).forEach(r => {
+    const res = computeRound(r);
+    for (let i = 0; i < 4; i++) {
+      totals[i].points += res.perPlayerPoints[i];
+      totals[i].stableford += res.playerTotals.stableford[i];
+      totals[i].birdies += res.playerTotals.birdies[i];
+    }
+  });
+  const ranked = totals
+    .sort((a, b) => b.points - a.points || b.stableford - a.stableford || b.birdies - a.birdies || a.i - b.i)
+    .map(t => t.i);
+  const newPairing = [[ranked[0], ranked[3]], [ranked[1], ranked[2]]];
+  if (JSON.stringify(newPairing) !== JSON.stringify(r5.pairing)) {
+    r5.pairing = newPairing;
+    saveState();
+  }
+}
+
 function currentHatWearer() {
   for (let i = state.rounds.length - 1; i >= 0; i--) {
     const r = state.rounds[i];
@@ -824,6 +853,7 @@ function render() {
     b.classList.toggle("active", b.dataset.tab === ui.tab);
   });
   const view = document.getElementById("view");
+  syncDynamicPairing();
   if (ui.tab === "leaderboard") renderLeaderboard(view);
   else if (ui.tab === "rounds") renderRounds(view);
   else if (ui.tab === "scores") renderScores(view);
@@ -1383,6 +1413,12 @@ function renderSetup(view) {
           ${Object.entries(FORMATS).map(([k,v]) => `<option value="${k}" ${r.format===k?"selected":""}>${v.label}</option>`).join("")}
         </select>
       </div>
+      ${r.id === "r5" ? `
+      <div class="field">
+        <label>Pairing (automatic)</label>
+        <div class="muted" style="padding:4px 0;">Cup leader + 4th place vs 2nd + 3rd, based on standings after Round 4. Currently: <b>${escapeHtml(state.players[r.pairing[0][0]].name)}+${escapeHtml(state.players[r.pairing[0][1]].name)} vs ${escapeHtml(state.players[r.pairing[1][0]].name)}+${escapeHtml(state.players[r.pairing[1][1]].name)}</b>. Locks once R5 scoring starts.</div>
+      </div>
+      ` : `
       <div class="field">
         <label>Pairing</label>
         <select data-round="${r.id}" data-k="pairing">
@@ -1391,6 +1427,7 @@ function renderSetup(view) {
           <option value="0,3|1,2" ${pairKey(r.pairing)==="0,3|1,2"?"selected":""}>${state.players[0].name}+${state.players[3].name}  vs  ${state.players[1].name}+${state.players[2].name}</option>
         </select>
       </div>
+      `}
     `;
     rd.appendChild(block);
   });
@@ -1514,8 +1551,10 @@ function setDot(s) {
 }
 
 function schedulePush() {
-  clearTimeout(SYNC.pushTimer);
-  SYNC.pushTimer = setTimeout(pushState, 700);
+  // saveState can run during the initial render, before SYNC is initialized
+  let s; try { s = SYNC; } catch (e) { return; }
+  clearTimeout(s.pushTimer);
+  s.pushTimer = setTimeout(pushState, 700);
 }
 
 async function pushState() {

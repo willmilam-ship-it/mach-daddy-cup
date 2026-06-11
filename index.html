@@ -33,6 +33,9 @@
   }
   header.topbar h1 { margin: 0; font-size: 18px; font-weight: 700; letter-spacing: -0.01em; color: #2a3a1f; }
   header.topbar .sub { font-size: 12px; color: #6f7a62; margin-top: 2px; }
+  #syncDot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-left:6px; background:#b8b8b8; vertical-align:middle; transition: background 0.3s; }
+  #syncDot.live { background:#4caf50; }
+  #syncDot.sync { background:#e6a23c; }
   main { padding: 14px 14px 20px; }
   nav.tabs {
     position: fixed;
@@ -247,7 +250,7 @@
 <div class="app">
   <header class="topbar">
     <h1 id="topTitle">Mach Daddy Cup 2026</h1>
-    <div class="sub" id="topSub">Scotland · June 11–15</div>
+    <div class="sub" id="topSub">Scotland · June 11–15<span id="syncDot" title="Live sync status"></span></div>
   </header>
   <main id="view"></main>
 </div>
@@ -259,6 +262,7 @@
 </nav>
 <div class="toast" id="toast"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
 "use strict";
 
@@ -502,6 +506,7 @@ function loadState() {
 function saveState() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
   catch (e) { console.error("Save failed:", e); }
+  if (typeof schedulePush === "function") schedulePush();
 }
 
 function resetState() {
@@ -1318,6 +1323,98 @@ document.querySelectorAll("nav.tabs button").forEach(b => {
 });
 
 render();
+
+// ============================================================
+// LIVE SYNC (Supabase Realtime; whole-state last-write-wins by rev)
+// One shared row (cup_state id=1). Every save pushes {rev, device, data}.
+// Incoming rows with a higher rev from another device replace local state.
+// Keep ONE designated scorer per round to avoid offline-edit conflicts.
+// ============================================================
+const SYNC = {
+  url: "https://lyhdmnrowikiodzcdegl.supabase.co",
+  key: "sb_publishable_xQV1myVYcDCKsWQt3u8Q_Q_JSOAdHe2", // browser-safe publishable key
+  client: null, deviceId: null, rev: 0,
+  pushTimer: null, dirty: false, pendingRender: false,
+};
+
+(function loadSyncMeta() {
+  try {
+    const m = JSON.parse(localStorage.getItem("machDaddySync_v1") || "{}");
+    SYNC.deviceId = m.deviceId || (crypto.randomUUID ? crypto.randomUUID() : "d" + Math.random().toString(36).slice(2));
+    SYNC.rev = m.rev || 0;
+  } catch (e) { SYNC.deviceId = "d" + Math.random().toString(36).slice(2); }
+  persistSyncMeta();
+})();
+
+function persistSyncMeta() {
+  try { localStorage.setItem("machDaddySync_v1", JSON.stringify({ deviceId: SYNC.deviceId, rev: SYNC.rev })); } catch (e) {}
+}
+
+function setDot(s) {
+  const d = document.getElementById("syncDot");
+  if (d) d.className = s === "live" ? "live" : (s === "sync" ? "sync" : "");
+}
+
+function schedulePush() {
+  clearTimeout(SYNC.pushTimer);
+  SYNC.pushTimer = setTimeout(pushState, 700);
+}
+
+async function pushState() {
+  if (!SYNC.client) return;
+  SYNC.rev += 1;
+  persistSyncMeta();
+  setDot("sync");
+  try {
+    const { error } = await SYNC.client.from("cup_state")
+      .upsert({ id: 1, rev: SYNC.rev, device: SYNC.deviceId, data: state });
+    SYNC.dirty = !!error;
+    setDot(error ? "off" : "live");
+  } catch (e) { SYNC.dirty = true; setDot("off"); }
+}
+
+function applyRemote(row) {
+  if (!row || !row.data || !row.data.players) return;             // ignore seed/empty
+  if (row.device === SYNC.deviceId) {                              // our own write echoed back
+    if (row.rev > SYNC.rev) { SYNC.rev = row.rev; persistSyncMeta(); }
+    return;
+  }
+  if (row.rev <= SYNC.rev) return;                                 // stale or already seen
+  SYNC.rev = row.rev;
+  persistSyncMeta();
+  state = row.data;
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+  const ae = document.activeElement;
+  const typing = ae && (ae.tagName === "INPUT" || ae.tagName === "SELECT" || ae.tagName === "TEXTAREA");
+  if (typing) SYNC.pendingRender = true;                           // don't yank the keyboard mid-entry
+  else render();
+}
+
+document.addEventListener("focusout", () => {
+  if (SYNC.pendingRender) { SYNC.pendingRender = false; setTimeout(render, 50); }
+});
+
+async function pollRemote() {
+  if (!SYNC.client) return;
+  try {
+    const { data, error } = await SYNC.client.from("cup_state").select("rev,device,data").eq("id", 1).single();
+    if (error) { setDot("off"); return; }
+    if (data.rev > SYNC.rev) applyRemote(data);
+    else if (data.rev < SYNC.rev || SYNC.dirty) { SYNC.dirty = false; pushState(); } // we have newer local (scored offline) — catch up
+    setDot("live");
+  } catch (e) { setDot("off"); }
+}
+
+(function initSync() {
+  if (!window.supabase) { setDot("off"); return; }                 // CDN blocked/offline: app still works locally
+  SYNC.client = window.supabase.createClient(SYNC.url, SYNC.key);
+  SYNC.client
+    .channel("cup")
+    .on("postgres_changes", { event: "*", schema: "public", table: "cup_state" }, payload => applyRemote(payload.new))
+    .subscribe(status => setDot(status === "SUBSCRIBED" ? "live" : "off"));
+  pollRemote();                                                    // initial catch-up
+  setInterval(pollRemote, 20000);                                  // websocket fallback for flaky course wifi
+})();
 </script>
 </body>
 </html>

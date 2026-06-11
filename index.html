@@ -1,0 +1,1323 @@
+<!doctype html>
+<script type="application/json" id="cowork-artifact-meta">
+{
+  "name": "Mach Daddy Cup",
+  "schemaVersion": 1,
+  "description": "Mach Daddy 2026 scoring app — Scotland golf trip, June 11–15. Four players (Will M., Will C., Daniel, Erick) over six rounds with rotating 2v2 pairings, per-round formats (four-ball, scramble, Stableford, greensomes, foursomes), individual net Stableford tiebreaker, side pots (birdies, longest drive, closest to pin), and a cumulative Mach Daddy Cup leaderboard. Persists in localStorage — works offline on the course."
+}
+</script>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mach Daddy Cup 2026</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: #f5f3ee;
+    color: #1f2a1a;
+    min-height: 100vh;
+    padding-bottom: 76px;
+    font-size: 15px;
+    line-height: 1.45;
+  }
+  .app { max-width: 560px; margin: 0 auto; }
+  header.topbar {
+    padding: 18px 18px 10px;
+    border-bottom: 1px solid #e2ddce;
+    background: #faf8f2;
+    position: sticky; top: 0; z-index: 10;
+  }
+  header.topbar h1 { margin: 0; font-size: 18px; font-weight: 700; letter-spacing: -0.01em; color: #2a3a1f; }
+  header.topbar .sub { font-size: 12px; color: #6f7a62; margin-top: 2px; }
+  main { padding: 14px 14px 20px; }
+  nav.tabs {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: #faf8f2;
+    border-top: 1px solid #e2ddce;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    max-width: 560px;
+    margin: 0 auto;
+    padding-bottom: env(safe-area-inset-bottom);
+    z-index: 20;
+  }
+  nav.tabs button {
+    appearance: none; background: transparent; border: 0;
+    padding: 10px 4px 12px; font-size: 11px; font-weight: 600;
+    color: #6f7a62; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+  }
+  nav.tabs button.active { color: #2a3a1f; }
+  nav.tabs button .ico { font-size: 20px; line-height: 1; }
+  .card {
+    background: #fff; border: 1px solid #e2ddce;
+    border-radius: 12px; padding: 14px; margin-bottom: 12px;
+  }
+  .card h2 {
+    margin: 0 0 10px; font-size: 14px; font-weight: 700;
+    color: #2a3a1f; text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .card h3 { margin: 0 0 6px; font-size: 15px; font-weight: 700; color: #2a3a1f; }
+  .muted { color: #6f7a62; font-size: 12px; }
+  .lb-row {
+    display: grid;
+    grid-template-columns: 28px 34px 1fr auto;
+    align-items: center; gap: 10px;
+    padding: 10px 6px; border-bottom: 1px solid #f0ecdf;
+  }
+  .lb-row:last-child { border-bottom: 0; }
+  .lb-rank { font-weight: 700; color: #6f7a62; font-size: 13px; text-align: center; }
+  .lb-row.first .lb-rank { color: #b98a2a; }
+  .avatar {
+    width: 34px; height: 34px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 700; font-size: 12px;
+  }
+  .lb-name { font-weight: 600; color: #1f2a1a; }
+  .lb-meta { font-size: 11px; color: #6f7a62; margin-top: 2px; }
+  .lb-points { font-weight: 700; font-size: 18px; color: #2a3a1f; }
+  .lb-points small { font-weight: 500; font-size: 11px; color: #6f7a62; display: block; }
+  .cup-banner {
+    background: linear-gradient(135deg, #3a5024 0%, #5b7a3a 100%);
+    color: #fff; padding: 18px 16px; border-radius: 14px; margin-bottom: 14px;
+  }
+  .cup-banner .cup-title { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }
+  .cup-banner .cup-sub { opacity: 0.85; font-size: 12px; margin-top: 2px; }
+  .cup-banner .cup-hat { font-size: 13px; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.2); }
+  .round-card { cursor: pointer; transition: transform 0.05s; }
+  .round-card:active { transform: scale(0.99); }
+  .round-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+  .round-title { font-weight: 700; color: #2a3a1f; }
+  .round-sess { font-size: 11px; color: #6f7a62; margin-top: 1px; }
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 999px;
+    font-size: 11px; font-weight: 600;
+  }
+  .badge.upcoming { background: #f0ecdf; color: #6f7a62; }
+  .badge.active { background: #fde8c3; color: #8a5a12; }
+  .badge.complete { background: #d6e7c4; color: #3d5a1c; }
+  .round-pair {
+    display: flex; gap: 8px; margin-top: 10px;
+    align-items: center; font-size: 12px; flex-wrap: wrap;
+  }
+  .pair-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 8px; border-radius: 6px;
+    background: #f5f3ee; font-weight: 600;
+  }
+  .pair-vs { color: #6f7a62; font-weight: 600; }
+  .format-line { font-size: 12px; color: #6f7a62; margin-top: 6px; font-style: italic; }
+  .score-grid { display: grid; width: 100%; font-size: 13px; }
+  .sc-head {
+    display: grid;
+    grid-template-columns: 28px 28px 28px repeat(4, 1fr);
+    background: #f5f3ee; font-weight: 700; color: #6f7a62;
+    font-size: 11px; text-transform: uppercase;
+    padding: 6px 4px; border-radius: 6px 6px 0 0;
+    gap: 2px; text-align: center;
+  }
+  .sc-row {
+    display: grid;
+    grid-template-columns: 28px 28px 28px repeat(4, 1fr);
+    padding: 2px 4px; border-bottom: 1px solid #f0ecdf;
+    gap: 2px; align-items: center; text-align: center;
+  }
+  .sc-row.totals {
+    background: #f5f3ee; font-weight: 700;
+    padding: 6px 4px; border-radius: 0 0 6px 6px;
+    border-bottom: 0;
+  }
+  .sc-cell { padding: 2px 0; }
+  .sc-par { color: #6f7a62; font-size: 11px; }
+  .sc-si { color: #b0a98f; font-size: 10px; }
+  .sc-input {
+    width: 100%; appearance: none;
+    border: 1px solid transparent; background: transparent;
+    text-align: center; font-size: 15px; padding: 6px 0;
+    font-weight: 600; color: #1f2a1a; border-radius: 6px;
+    font-family: inherit;
+  }
+  .sc-input:focus { outline: none; border-color: #5b7a3a; background: #fff; }
+  .sc-input.bird { color: #b45309; background: #fef3c7; }
+  .sc-input.eagle { color: #b45309; background: #fde68a; font-weight: 800; }
+  .sc-input.bogey { color: #475569; background: #f1f5f9; }
+  .sc-input.dbogey { color: #64748b; background: #e2e8f0; }
+  .sc-input.par { color: #1f2a1a; }
+  .team1-bg { background: rgba(59, 113, 186, 0.06); }
+  .team2-bg { background: rgba(198, 102, 46, 0.06); }
+  .btn {
+    appearance: none; border: 0; background: #3a5024;
+    color: #fff; font-weight: 600; padding: 10px 16px;
+    border-radius: 10px; font-size: 14px; cursor: pointer;
+    font-family: inherit;
+  }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn.ghost { background: transparent; color: #3a5024; border: 1px solid #3a5024; }
+  .btn.small { padding: 6px 10px; font-size: 12px; }
+  .btn.danger { background: #b23b2a; }
+  .match-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; padding: 12px 14px;
+    background: linear-gradient(to right, rgba(59, 113, 186, 0.1), rgba(198, 102, 46, 0.1));
+    border-radius: 10px; margin-bottom: 12px; font-size: 13px;
+  }
+  .match-status { font-weight: 700; font-size: 16px; color: #2a3a1f; text-align: center; flex: 1; }
+  .team-name { font-weight: 600; font-size: 12px; line-height: 1.3; }
+  .team-name.t1 { color: #3b71ba; }
+  .team-name.t2 { color: #c6662e; }
+  .field { margin-bottom: 10px; }
+  .field label { display: block; font-size: 12px; font-weight: 600; color: #6f7a62; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .field input, .field select {
+    width: 100%; padding: 9px 10px;
+    border: 1px solid #d8d2bd; border-radius: 8px;
+    background: #fff; font-size: 14px; font-family: inherit;
+    color: #1f2a1a;
+  }
+  .field.row { display: grid; grid-template-columns: 1fr 100px; gap: 8px; align-items: end; }
+  .pot-summary { display: flex; justify-content: space-between; align-items: baseline; }
+  .pot-summary .amt { font-size: 22px; font-weight: 800; color: #2a3a1f; }
+  .pot-list { margin-top: 8px; }
+  .pot-row {
+    display: flex; justify-content: space-between;
+    padding: 6px 0; border-bottom: 1px solid #f0ecdf; font-size: 13px;
+  }
+  .pot-row:last-child { border-bottom: 0; }
+  .hole-select {
+    display: grid; grid-template-columns: 1fr auto auto;
+    gap: 6px; padding: 8px 0; border-bottom: 1px solid #f0ecdf;
+    align-items: center; font-size: 13px;
+  }
+  .hole-select:last-child { border-bottom: 0; }
+  select.inline {
+    padding: 4px 6px; font-size: 12px;
+    border: 1px solid #d8d2bd; border-radius: 6px;
+    background: #fff; font-family: inherit;
+  }
+  .back {
+    appearance: none; background: transparent; border: 0;
+    color: #3a5024; font-weight: 600; padding: 4px 0;
+    cursor: pointer; font-size: 13px; margin-bottom: 8px;
+    font-family: inherit;
+  }
+  .toast {
+    position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
+    background: #2a3a1f; color: #fff; padding: 10px 16px; border-radius: 10px;
+    font-size: 13px; opacity: 0; pointer-events: none;
+    transition: opacity 0.2s, transform 0.2s;
+    z-index: 100; max-width: 80%;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(-4px); }
+  /* tees strip */
+  .tee-row {
+    display: grid;
+    grid-template-columns: 18px 1fr auto auto;
+    gap: 8px; align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #f0ecdf;
+  }
+  .tee-row:last-child { border-bottom: 0; }
+  .tee-dot { width: 14px; height: 14px; border-radius: 50%; }
+  .tee-player { font-weight: 600; font-size: 14px; color: #1f2a1a; }
+  .tee-player small { display: block; color: #6f7a62; font-weight: 400; font-size: 11px; }
+  .tee-select {
+    padding: 6px 8px; font-size: 12px;
+    border: 1px solid #d8d2bd; border-radius: 6px;
+    background: #fff; font-family: inherit;
+    max-width: 180px;
+  }
+  .tee-ch {
+    font-weight: 700; font-size: 15px; color: #2a3a1f;
+    min-width: 36px; text-align: right;
+  }
+  .tee-ch small { display: block; color: #6f7a62; font-weight: 500; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .bulk-bar {
+    display: flex; gap: 6px; margin-top: 10px;
+    padding-top: 10px; border-top: 1px solid #f0ecdf;
+    align-items: center; flex-wrap: wrap;
+  }
+  .bulk-bar .muted { font-size: 11px; margin-right: 4px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <h1 id="topTitle">Mach Daddy Cup 2026</h1>
+    <div class="sub" id="topSub">Scotland · June 11–15</div>
+  </header>
+  <main id="view"></main>
+</div>
+<nav class="tabs">
+  <button data-tab="leaderboard" class="active"><span class="ico">🏆</span>Cup</button>
+  <button data-tab="rounds"><span class="ico">🏌️</span>Rounds</button>
+  <button data-tab="pots"><span class="ico">💰</span>Pots</button>
+  <button data-tab="setup"><span class="ico">⚙️</span>Setup</button>
+</nav>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+
+const PLAYER_COLORS = ["#3b71ba", "#c6662e", "#5b7a3a", "#8a3bba"];
+
+// Course data with multiple tee options.
+// Rating/slope values are approximate — edit via Setup if you have official scorecards.
+const DEFAULT_COURSES = {
+  dornoch: {
+    // Official scorecard (royaldornoch.com, 2025 card): tees are Green/Orange/Grey/Blue.
+    name: "Royal Dornoch", par: 70,
+    tees: [
+      { name: "Greens",  rating: 72.8, slope: 137 },
+      { name: "Oranges", rating: 71.3, slope: 131 },
+      { name: "Greys",   rating: 69.5, slope: 127 },
+      { name: "Blues",   rating: 66.3, slope: 114 },
+    ],
+    defaultTee: 1,
+    holes: [
+      {par:4,si:15},{par:3,si:5},{par:4,si:11},{par:4,si:3},{par:4,si:13},{par:3,si:9},
+      {par:4,si:1},{par:4,si:7},{par:5,si:17},{par:3,si:10},{par:4,si:4},{par:5,si:18},
+      {par:3,si:12},{par:4,si:2},{par:4,si:16},{par:4,si:8},{par:4,si:14},{par:4,si:6}
+    ]
+  },
+  struie: {
+    // Official scorecard (Clere Golf Ref 16731): par 70 men, tees Green/Orange/Grey/Blue.
+    name: "The Struie", par: 70,
+    tees: [
+      { name: "Greens",  rating: 69.8, slope: 124 },
+      { name: "Oranges", rating: 68.4, slope: 120 },
+      { name: "Greys",   rating: 65.4, slope: 114 },
+      { name: "Blues",   rating: 64.4, slope: 110 },
+    ],
+    defaultTee: 1,
+    holes: [
+      {par:3,si:18},{par:4,si:4},{par:4,si:14},{par:4,si:2},{par:4,si:8},{par:4,si:16},
+      {par:3,si:6},{par:5,si:12},{par:3,si:10},{par:4,si:9},{par:4,si:15},{par:3,si:5},
+      {par:5,si:13},{par:4,si:1},{par:4,si:17},{par:4,si:3},{par:5,si:7},{par:3,si:11}
+    ]
+  },
+  tain: {
+    // Official Tain GC scorecard: Blue/White/Yellow/Red (men's ratings).
+    name: "Tain", par: 70,
+    tees: [
+      { name: "Blues",   rating: 71.9, slope: 130 },
+      { name: "Whites",  rating: 70.5, slope: 127 },
+      { name: "Yellows", rating: 68.5, slope: 124 },
+      { name: "Reds",    rating: 63.2, slope: 114 },
+    ],
+    defaultTee: 1,
+    holes: [
+      {par:4,si:12},{par:4,si:4},{par:4,si:2},{par:5,si:10},{par:3,si:18},{par:4,si:14},
+      {par:4,si:8},{par:3,si:16},{par:4,si:6},{par:4,si:3},{par:4,si:11},{par:4,si:5},
+      {par:5,si:15},{par:4,si:1},{par:4,si:9},{par:3,si:17},{par:3,si:7},{par:4,si:13}
+    ]
+  },
+  fortrose: {
+    // Official scorecard: men's par 71 from all tees (no per-tee par override needed).
+    name: "Fortrose & Rosemarkie", par: 71,
+    tees: [
+      { name: "Blacks",  rating: 69.9, slope: 121 },
+      { name: "Whites",  rating: 69.0, slope: 119 },
+      { name: "Yellows", rating: 68.1, slope: 118 },
+      { name: "Reds",    rating: 67.0, slope: 115 },
+    ],
+    defaultTee: 1,
+    holes: [
+      {par:4,si:11},{par:4,si:3},{par:4,si:7},{par:5,si:1},{par:3,si:17},{par:5,si:15},
+      {par:4,si:13},{par:4,si:5},{par:3,si:9},{par:4,si:12},{par:4,si:6},{par:4,si:2},
+      {par:4,si:8},{par:4,si:18},{par:4,si:16},{par:4,si:14},{par:4,si:4},{par:3,si:10}
+    ]
+  },
+  brora: {
+    // Official Brora GC scorecard (men's tees; Reds omitted — men's par differs there).
+    name: "Brora", par: 70,
+    tees: [
+      { name: "Whites",  rating: 70.0, slope: 118 },
+      { name: "Yellows", rating: 68.9, slope: 116 },
+    ],
+    defaultTee: 0,
+    holes: [
+      {par:4,si:13},{par:4,si:9},{par:4,si:1},{par:4,si:15},{par:4,si:3},{par:3,si:7},
+      {par:4,si:11},{par:5,si:5},{par:3,si:17},{par:4,si:6},{par:5,si:8},{par:4,si:10},
+      {par:3,si:18},{par:4,si:16},{par:4,si:2},{par:4,si:12},{par:4,si:4},{par:3,si:14}
+    ]
+  },
+  castleStuart: {
+    name: "Castle Stuart", par: 72,
+    tees: [
+      { name: "Blacks", rating: 74.1, slope: 141 },
+      { name: "Whites", rating: 72.6, slope: 136 },
+      { name: "Greens", rating: 70.8, slope: 132 },
+    ],
+    defaultTee: 2,
+    // Official Cabot Highlands 2025 scorecard.
+    holes: [
+      {par:4,si:9},{par:5,si:5},{par:4,si:13},{par:3,si:17},{par:4,si:7},{par:5,si:3},
+      {par:4,si:1},{par:3,si:15},{par:4,si:11},{par:4,si:14},{par:3,si:16},{par:5,si:2},
+      {par:4,si:4},{par:4,si:10},{par:4,si:8},{par:4,si:18},{par:3,si:6},{par:5,si:12}
+    ]
+  }
+};
+
+const FORMATS = {
+  "fourball-match":      { label: "Four-ball match play", mode: "individual", resultType: "match" },
+  "fourball-stableford": { label: "Four-ball Stableford",  mode: "individual", resultType: "stableford" },
+  "scramble":            { label: "Scramble (medal)",      mode: "team",       resultType: "medal" },
+  "greensomes-match":    { label: "Greensomes match play", mode: "team",       resultType: "match" },
+  "foursomes-medal":     { label: "Foursomes (alt-shot)",  mode: "team",       resultType: "medal" },
+};
+
+function buildDefaultRounds() {
+  return [
+    { id:"r1", course:"dornoch",      session:"Fri Jun 12 · 10:40 AM", pairing:[[0,1],[2,3]], format:"fourball-match"      },
+    { id:"r2", course:"struie",       session:"Fri Jun 12 · 4:40 PM",  pairing:[[0,2],[1,3]], format:"scramble"            },
+    { id:"r3", course:"tain",         session:"Sat Jun 13 · 8:00 AM",  pairing:[[0,3],[1,2]], format:"fourball-stableford" },
+    { id:"r4", course:"fortrose",     session:"Sat Jun 13 · 2:06 PM",  pairing:[[0,1],[2,3]], format:"greensomes-match"    },
+    { id:"r5", course:"brora",        session:"Sun Jun 14 · 8:50 AM",  pairing:[[0,2],[1,3]], format:"foursomes-medal"     },
+    { id:"r6", course:"castleStuart", session:"Mon Jun 15 · 8:24 AM",  pairing:[[0,3],[1,2]], format:"fourball-match"      },
+  ].map((r) => {
+    const c = DEFAULT_COURSES[r.course];
+    return {
+      ...r,
+      name: c.name,
+      par: c.par,
+      holes: JSON.parse(JSON.stringify(c.holes)),
+      scores: { p0:Array(18).fill(null), p1:Array(18).fill(null), p2:Array(18).fill(null), p3:Array(18).fill(null) },
+      teamScores: { t1:Array(18).fill(null), t2:Array(18).fill(null) },
+      // Each player's tee selection for this round (index into course.tees)
+      tees: { p0: c.defaultTee, p1: c.defaultTee, p2: c.defaultTee, p3: c.defaultTee },
+      status: "upcoming"
+    };
+  });
+}
+
+const DEFAULT_STATE = {
+  players: [
+    { id: "p0", name: "Will M.", handicapIndex: 10.4, color: PLAYER_COLORS[0] },
+    { id: "p1", name: "Will C.", handicapIndex: 10.5, color: PLAYER_COLORS[1] },
+    { id: "p2", name: "Daniel",  handicapIndex: 11.4, color: PLAYER_COLORS[2] },
+    { id: "p3", name: "Erick",   handicapIndex: 5.6,  color: PLAYER_COLORS[3] },
+  ],
+  rounds: buildDefaultRounds(),
+  pots: {
+    birdieBuyIn: 5,
+    longestDriveHoles: {},
+    longestDriveWinners: {},
+    closestPinHoles: {},
+    closestPinWinners: {},
+  }
+};
+
+const STORAGE_KEY = "machDaddyCup_v6";
+const PREV_STORAGE_KEYS = ["machDaddyCup_v5", "machDaddyCup_v4", "machDaddyCup_v3", "machDaddyCup_v2"];
+let state = loadState();
+let ui = { tab: "leaderboard", activeRoundId: null };
+
+function loadState() {
+  try {
+    let raw = localStorage.getItem(STORAGE_KEY);
+    // If current key not present, try previous keys (and migrate)
+    if (!raw) {
+      for (const k of PREV_STORAGE_KEYS) {
+        raw = localStorage.getItem(k);
+        if (raw) break;
+      }
+    }
+    if (!raw) return structuredClone(DEFAULT_STATE);
+    const s = JSON.parse(raw);
+    s.pots = s.pots || DEFAULT_STATE.pots;
+    s.pots.longestDriveHoles = s.pots.longestDriveHoles || {};
+    s.pots.longestDriveWinners = s.pots.longestDriveWinners || {};
+    s.pots.closestPinHoles = s.pots.closestPinHoles || {};
+    s.pots.closestPinWinners = s.pots.closestPinWinners || {};
+    // Migration: ensure tees on each round
+    s.rounds.forEach(r => {
+      if (!r.tees) {
+        const c = DEFAULT_COURSES[r.course];
+        r.tees = { p0: c.defaultTee, p1: c.defaultTee, p2: c.defaultTee, p3: c.defaultTee };
+      }
+      // Remove old handicapOverrides if present
+      if (r.handicapOverrides) delete r.handicapOverrides;
+      // v5 -> v6 migration: Castle Stuart tees reordered
+      //   old: 0=Blacks, 1=Blues(now Greens, was misnamed), 2=Whites(was 68.3/125, now real Whites 72.6/136)
+      //   new: 0=Blacks, 1=Whites (more challenging than old Whites), 2=Greens (default — was old "Blues")
+      // Remap so a player still sits on roughly the same tees they had before:
+      //   old 0 (Blacks) -> new 0 (Blacks)
+      //   old 1 (Blues)  -> new 2 (Greens) — same rating/slope
+      //   old 2 (Whites) -> new 2 (Greens) — old Whites were the forward tees; closest match is Greens
+      if (r.course === "castleStuart" && r._csV6 !== true) {
+        const remap = { 0: 0, 1: 2, 2: 2 };
+        for (const k of ["p0","p1","p2","p3"]) {
+          if (r.tees[k] != null && remap[r.tees[k]] != null) r.tees[k] = remap[r.tees[k]];
+        }
+        r._csV6 = true;
+      }
+      // Course data refresh (Jun 2026): official scorecards for Dornoch & Struie
+      // (new Green/Orange/Grey/Blue tees), Tain (4 tees, corrected ratings),
+      // Fortrose (par 71 from all men's tees), Castle Stuart (corrected hole par/SI).
+      // Refresh hole data; reset tee picks where the tee list itself changed.
+      if (r._coursesV8 !== true) {
+        const c = DEFAULT_COURSES[r.course];
+        if (c) {
+          r.holes = JSON.parse(JSON.stringify(c.holes));
+          r.par = c.par;
+          if (["dornoch","struie","tain"].includes(r.course)) {
+            r.tees = { p0: c.defaultTee, p1: c.defaultTee, p2: c.defaultTee, p3: c.defaultTee };
+          } else {
+            for (const k of ["p0","p1","p2","p3"]) {
+              if (r.tees[k] == null || r.tees[k] >= c.tees.length) r.tees[k] = c.defaultTee;
+            }
+          }
+        }
+        r._coursesV8 = true;
+      }
+    });
+    // Migration: rename .handicap to .handicapIndex
+    s.players.forEach(p => {
+      if (p.handicapIndex == null && p.handicap != null) {
+        p.handicapIndex = p.handicap;
+        delete p.handicap;
+      }
+      if (p.handicapIndex == null) p.handicapIndex = 12.0;
+    });
+    // Roster update (Jun 2026): Peter replaced by Daniel; real handicap indexes.
+    // Only overwrites the old 12.0 placeholders — manually entered values survive.
+    if (s._rosterV7 !== true) {
+      const realHI = { p0: 10.4, p1: 10.5, p2: 11.4, p3: 5.6 };
+      s.players.forEach(p => {
+        if (p.id === "p2" && p.name === "Peter") p.name = "Daniel";
+        if (p.handicapIndex === 12.0 && realHI[p.id] != null) p.handicapIndex = realHI[p.id];
+      });
+      s._rosterV7 = true;
+    }
+    return s;
+  } catch (e) {
+    return structuredClone(DEFAULT_STATE);
+  }
+}
+
+function saveState() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+  catch (e) { console.error("Save failed:", e); }
+}
+
+function resetState() {
+  if (!confirm("Reset ALL scores, settings, and pots? This cannot be undone.")) return;
+  state = structuredClone(DEFAULT_STATE);
+  saveState();
+  render();
+  toast("Everything reset");
+}
+
+// Compute Course Handicap: round(HI × Slope/113 + (Rating − Par))
+function courseHandicap(hi, tee, par) {
+  if (hi == null || !tee) return 0;
+  return Math.round(hi * tee.slope / 113 + (tee.rating - par));
+}
+
+function playerTeeForRound(round, playerIdx) {
+  const course = DEFAULT_COURSES[round.course];
+  const teeIdx = round.tees?.["p"+playerIdx] ?? course.defaultTee;
+  return course.tees[teeIdx];
+}
+
+function effectiveCourseHandicap(round, playerIdx) {
+  const course = DEFAULT_COURSES[round.course];
+  const tee = playerTeeForRound(round, playerIdx);
+  const hi = state.players[playerIdx].handicapIndex || 0;
+  // If the tee defines its own par (e.g. Fortrose Yellows/Reds at par 70 vs Blacks/Whites at par 71), use it.
+  const par = tee.par ?? course.par;
+  return courseHandicap(hi, tee, par);
+}
+
+function strokesOnHole(courseHandicap, si) {
+  if (courseHandicap <= 0) return 0;
+  let strokes = Math.floor(courseHandicap / 18);
+  if ((courseHandicap % 18) >= si) strokes += 1;
+  return strokes;
+}
+
+function stablefordPoints(gross, par, strokes) {
+  if (gross == null || gross === "") return 0;
+  const net = gross - strokes;
+  const diff = net - par;
+  if (diff <= -2) return 4;
+  if (diff === -1) return 3;
+  if (diff === 0)  return 2;
+  if (diff === 1)  return 1;
+  return 0;
+}
+
+function isBirdie(gross, par) {
+  return gross != null && gross !== "" && gross < par;
+}
+
+function computeRound(round) {
+  const fmt = FORMATS[round.format];
+  const result = {
+    holes: [],
+    playerTotals: { gross: [0,0,0,0], stableford: [0,0,0,0], birdies: [0,0,0,0] },
+    teamTotals: { gross: [0,0], stableford: [0,0] },
+    matchStatus: { team1Up: 0, throughHole: 0, holesRemaining: 18, result: null },
+    teamPoints: [0, 0],
+    complete: false,
+  };
+
+  // Course handicaps for this round, driven by each player's tee selection
+  const CH = [0,1,2,3].map(i => effectiveCourseHandicap(round, i));
+  let holesPlayed = 0;
+  let matchNet = 0;
+
+  for (let h = 0; h < 18; h++) {
+    const { par, si } = round.holes[h];
+    const holeData = { par, si, playerGross: [], playerNet: [], playerPoints: [], playerBirdie: [] };
+
+    if (fmt.mode === "individual") {
+      for (let p = 0; p < 4; p++) {
+        const gross = round.scores["p"+p][h];
+        const strokes = strokesOnHole(CH[p], si);
+        const net = gross != null ? gross - strokes : null;
+        const pts = stablefordPoints(gross, par, strokes);
+        holeData.playerGross[p] = gross;
+        holeData.playerNet[p] = net;
+        holeData.playerPoints[p] = pts;
+        holeData.playerBirdie[p] = isBirdie(gross, par);
+        if (gross != null) {
+          result.playerTotals.gross[p] += gross;
+          result.playerTotals.stableford[p] += pts;
+          if (holeData.playerBirdie[p]) result.playerTotals.birdies[p] += 1;
+        }
+      }
+
+      const [t1, t2] = round.pairing;
+      const t1Nets = t1.map(p => holeData.playerNet[p]).filter(v => v != null);
+      const t2Nets = t2.map(p => holeData.playerNet[p]).filter(v => v != null);
+      const t1Pts  = t1.map(p => holeData.playerPoints[p]);
+      const t2Pts  = t2.map(p => holeData.playerPoints[p]);
+      const t1Gross = t1.map(p => holeData.playerGross[p]).filter(v => v != null);
+      const t2Gross = t2.map(p => holeData.playerGross[p]).filter(v => v != null);
+      const t1BestGross = t1Gross.length ? Math.min(...t1Gross) : null;
+      const t2BestGross = t2Gross.length ? Math.min(...t2Gross) : null;
+      const t1BestNet = t1Nets.length ? Math.min(...t1Nets) : null;
+      const t2BestNet = t2Nets.length ? Math.min(...t2Nets) : null;
+      const t1BestPts = Math.max(...t1Pts);
+      const t2BestPts = Math.max(...t2Pts);
+
+      holeData.teamGross = [t1BestGross, t2BestGross];
+      holeData.teamNet = [t1BestNet, t2BestNet];
+      holeData.teamPts = [t1BestPts, t2BestPts];
+
+      if (fmt.resultType === "match" && t1BestNet != null && t2BestNet != null) {
+        if (t1BestNet < t2BestNet) matchNet += 1;
+        else if (t2BestNet < t1BestNet) matchNet -= 1;
+        holesPlayed = h + 1;
+        result.teamTotals.gross[0] += t1BestGross;
+        result.teamTotals.gross[1] += t2BestGross;
+      }
+      if (fmt.resultType === "stableford") {
+        if (t1BestPts != null) result.teamTotals.stableford[0] += t1BestPts;
+        if (t2BestPts != null) result.teamTotals.stableford[1] += t2BestPts;
+        if (t1BestGross != null && t2BestGross != null) {
+          holesPlayed = h + 1;
+          result.teamTotals.gross[0] += t1BestGross;
+          result.teamTotals.gross[1] += t2BestGross;
+        }
+      }
+    }
+    else {
+      const t1 = round.teamScores.t1[h];
+      const t2 = round.teamScores.t2[h];
+      const [t1p, t2p] = round.pairing;
+      const t1CH = Math.min(CH[t1p[0]], CH[t1p[1]]);
+      const t2CH = Math.min(CH[t2p[0]], CH[t2p[1]]);
+      const t1Strokes = strokesOnHole(t1CH, si);
+      const t2Strokes = strokesOnHole(t2CH, si);
+      const t1Net = t1 != null ? t1 - t1Strokes : null;
+      const t2Net = t2 != null ? t2 - t2Strokes : null;
+      holeData.teamGross = [t1, t2];
+      holeData.teamNet = [t1Net, t2Net];
+
+      if (t1 != null) result.teamTotals.gross[0] += t1;
+      if (t2 != null) result.teamTotals.gross[1] += t2;
+      if (t1 != null) result.teamTotals.stableford[0] += stablefordPoints(t1, par, t1Strokes);
+      if (t2 != null) result.teamTotals.stableford[1] += stablefordPoints(t2, par, t2Strokes);
+
+      if (fmt.resultType === "match" && t1Net != null && t2Net != null) {
+        if (t1Net < t2Net) matchNet += 1;
+        else if (t2Net < t1Net) matchNet -= 1;
+        holesPlayed = h + 1;
+      }
+      if (fmt.resultType === "medal" && t1 != null && t2 != null) {
+        holesPlayed = h + 1;
+      }
+    }
+
+    result.holes.push(holeData);
+  }
+
+  if (fmt.resultType === "match") {
+    const holesRemaining = 18 - holesPlayed;
+    result.matchStatus = { team1Up: matchNet, throughHole: holesPlayed, holesRemaining, result: null };
+    // Closeout fires only when the match is mathematically decided BEFORE 18
+    // (lead > holes remaining AND at least one hole still to play).
+    if (holesPlayed < 18 && Math.abs(matchNet) > holesRemaining) {
+      const closeout = `${Math.abs(matchNet)} & ${holesRemaining}`;
+      result.matchStatus.result = matchNet > 0 ? `Team 1 wins ${closeout}` : `Team 2 wins ${closeout}`;
+      result.complete = true;
+    } else if (holesPlayed === 18) {
+      if (matchNet > 0) result.matchStatus.result = `Team 1 wins ${matchNet} up`;
+      else if (matchNet < 0) result.matchStatus.result = `Team 2 wins ${-matchNet} up`;
+      else result.matchStatus.result = "Match halved";
+      result.complete = true;
+    }
+  } else if (fmt.resultType === "medal") {
+    if (holesPlayed === 18) {
+      const [a, b] = result.teamTotals.gross;
+      if (a < b) result.matchStatus.result = `Team 1 wins ${b - a} stroke${b-a===1?"":"s"}`;
+      else if (b < a) result.matchStatus.result = `Team 2 wins ${a - b} stroke${a-b===1?"":"s"}`;
+      else result.matchStatus.result = "Tied";
+      result.complete = true;
+    }
+  } else if (fmt.resultType === "stableford") {
+    if (holesPlayed === 18) {
+      const [a, b] = result.teamTotals.stableford;
+      if (a > b) result.matchStatus.result = `Team 1 wins by ${a - b} pts`;
+      else if (b > a) result.matchStatus.result = `Team 2 wins by ${b - a} pts`;
+      else result.matchStatus.result = "Tied on points";
+      result.complete = true;
+    }
+  }
+
+  const perPlayer = [0,0,0,0];
+  if (result.complete && result.matchStatus.result) {
+    const r = result.matchStatus.result;
+    if (/Team 1 wins/.test(r)) round.pairing[0].forEach(p => perPlayer[p] = 2);
+    else if (/Team 2 wins/.test(r)) round.pairing[1].forEach(p => perPlayer[p] = 2);
+    else if (/halved|Tied/i.test(r)) round.pairing.flat().forEach(p => perPlayer[p] = 1);
+  }
+  result.perPlayerPoints = perPlayer;
+
+  round.status = result.complete ? "complete" : (holesPlayed > 0 ? "active" : "upcoming");
+  return result;
+}
+
+function computeCup() {
+  const totals = state.players.map(p => ({
+    name: p.name, color: p.color, id: p.id,
+    points: 0, stableford: 0, birdies: 0, roundWins: 0
+  }));
+  state.rounds.forEach(r => {
+    const res = computeRound(r);
+    for (let i = 0; i < 4; i++) {
+      totals[i].points += res.perPlayerPoints[i];
+      if (res.perPlayerPoints[i] === 2) totals[i].roundWins += 1;
+      totals[i].stableford += res.playerTotals.stableford[i];
+      totals[i].birdies += res.playerTotals.birdies[i];
+    }
+  });
+  return totals;
+}
+
+function currentHatWearer() {
+  for (let i = state.rounds.length - 1; i >= 0; i--) {
+    const r = state.rounds[i];
+    const res = computeRound(r);
+    if (!res.complete) continue;
+    if (/Team 1 wins/.test(res.matchStatus.result)) return { round: r, players: r.pairing[0] };
+    if (/Team 2 wins/.test(res.matchStatus.result)) return { round: r, players: r.pairing[1] };
+  }
+  return null;
+}
+
+function activeRound() {
+  const active = state.rounds.find(r => r.status === "active");
+  if (active) return active;
+  return state.rounds.find(r => r.status === "upcoming");
+}
+
+function render() {
+  document.querySelectorAll("nav.tabs button").forEach(b => {
+    b.classList.toggle("active", b.dataset.tab === ui.tab);
+  });
+  const view = document.getElementById("view");
+  if (ui.tab === "leaderboard") renderLeaderboard(view);
+  else if (ui.tab === "rounds") renderRounds(view);
+  else if (ui.tab === "pots") renderPots(view);
+  else if (ui.tab === "setup") renderSetup(view);
+}
+
+function renderLeaderboard(view) {
+  document.getElementById("topTitle").textContent = "Mach Daddy Cup 2026";
+  const totals = computeCup();
+  const completed = state.rounds.filter(r => r.status === "complete").length;
+  document.getElementById("topSub").textContent = `Scotland · June 11–15 · ${completed} of 6 rounds complete`;
+
+  const sorted = [...totals].sort((a,b) => b.points - a.points || b.stableford - a.stableford);
+  const hat = currentHatWearer();
+  const ar = activeRound();
+
+  view.innerHTML = "";
+
+  const hero = el("div", "cup-banner");
+  const leadTxt = completed === 0
+    ? `🏆 Tournament starts Fri Jun 12 at Royal Dornoch`
+    : `🏆 ${sorted[0].name} leads`;
+  const subTxt = completed === 0
+    ? `Six rounds. Rotating 2v2 teams. Glory for the last cap standing.`
+    : `${sorted[0].points} pts · ${sorted[0].stableford} Stableford · ${sorted[0].birdies} birdies`;
+  hero.innerHTML = `
+    <div class="cup-title">${leadTxt}</div>
+    <div class="cup-sub">${subTxt}</div>
+    ${hat ? `<div class="cup-hat">👒 Current cap wearers: <b>${hat.players.map(i => state.players[i].name).join(" & ")}</b> (${hat.round.name})</div>` : ''}
+  `;
+  view.appendChild(hero);
+
+  const lb = el("div", "card");
+  lb.innerHTML = `<h2>Leaderboard</h2>`;
+  sorted.forEach((t, rank) => {
+    const row = el("div", "lb-row" + (rank === 0 ? " first" : ""));
+    const initials = initialsOf(t.name);
+    row.innerHTML = `
+      <div class="lb-rank">${rank+1}</div>
+      <div class="avatar" style="background:${t.color}">${initials}</div>
+      <div>
+        <div class="lb-name">${escapeHtml(t.name)}</div>
+        <div class="lb-meta">${t.roundWins} round win${t.roundWins===1?"":"s"} · ${t.stableford} Stbf · ${t.birdies} 🐦</div>
+      </div>
+      <div class="lb-points">${t.points}<small>points</small></div>
+    `;
+    lb.appendChild(row);
+  });
+  view.appendChild(lb);
+
+  if (ar) {
+    const res = computeRound(ar);
+    const card = el("div", "card round-card");
+    card.innerHTML = `
+      <div class="round-head">
+        <div>
+          <div class="round-title">${escapeHtml(ar.name)}</div>
+          <div class="round-sess">${ar.session} · ${FORMATS[ar.format].label}</div>
+        </div>
+        <span class="badge ${ar.status}">${ar.status}</span>
+      </div>
+      ${pairingHtml(ar)}
+      ${res.matchStatus.throughHole > 0 ? `<div class="format-line">Through hole ${res.matchStatus.throughHole} · ${res.matchStatus.result || matchHeading(res)}</div>` : `<div class="format-line">Tap to start scoring</div>`}
+    `;
+    card.onclick = () => openRound(ar.id);
+    view.appendChild(card);
+  }
+}
+
+function matchHeading(res) {
+  const n = res.matchStatus.team1Up;
+  if (n === 0) return "All square";
+  if (n > 0) return `Team 1 up ${n}`;
+  return `Team 2 up ${-n}`;
+}
+
+function pairingHtml(round) {
+  const [t1, t2] = round.pairing;
+  const name = i => escapeHtml(state.players[i].name);
+  return `
+    <div class="round-pair">
+      <span class="pair-badge" style="color:#3b71ba">${name(t1[0])} + ${name(t1[1])}</span>
+      <span class="pair-vs">vs</span>
+      <span class="pair-badge" style="color:#c6662e">${name(t2[0])} + ${name(t2[1])}</span>
+    </div>
+  `;
+}
+
+function renderRounds(view) {
+  document.getElementById("topTitle").textContent = "Rounds";
+  document.getElementById("topSub").textContent = "Six rounds · three pairings · each played twice";
+  view.innerHTML = "";
+  state.rounds.forEach((r, i) => {
+    const res = computeRound(r);
+    const card = el("div", "card round-card");
+    card.innerHTML = `
+      <div class="round-head">
+        <div>
+          <div class="round-title">Round ${i+1} · ${escapeHtml(r.name)}</div>
+          <div class="round-sess">${r.session}</div>
+        </div>
+        <span class="badge ${r.status}">${r.status}</span>
+      </div>
+      ${pairingHtml(r)}
+      <div class="format-line">${FORMATS[r.format].label}${res.matchStatus.result ? " · " + res.matchStatus.result : res.matchStatus.throughHole ? " · through " + res.matchStatus.throughHole : ""}</div>
+    `;
+    card.onclick = () => openRound(r.id);
+    view.appendChild(card);
+  });
+}
+
+function openRound(roundId) {
+  ui.activeRoundId = roundId;
+  ui.tab = "round-detail";
+  const view = document.getElementById("view");
+  renderRoundDetail(view);
+  document.querySelectorAll("nav.tabs button").forEach(b => b.classList.remove("active"));
+  document.querySelector("nav.tabs button[data-tab='rounds']").classList.add("active");
+}
+
+function renderRoundDetail(view) {
+  const round = state.rounds.find(r => r.id === ui.activeRoundId);
+  if (!round) return;
+  const course = DEFAULT_COURSES[round.course];
+  const fmt = FORMATS[round.format];
+  const res = computeRound(round);
+
+  document.getElementById("topTitle").textContent = round.name;
+  document.getElementById("topSub").textContent = `${round.session} · ${fmt.label}`;
+
+  view.innerHTML = "";
+  const back = el("button", "back");
+  back.textContent = "← Back to rounds";
+  back.onclick = () => { ui.tab = "rounds"; render(); };
+  view.appendChild(back);
+
+  const bar = el("div", "match-bar");
+  bar.innerHTML = `
+    <div class="team-name t1">${escapeHtml(state.players[round.pairing[0][0]].name)}<br/>${escapeHtml(state.players[round.pairing[0][1]].name)}</div>
+    <div class="match-status">${res.matchStatus.result || matchHeading(res) || "Not started"}<div class="muted" style="font-size:11px; margin-top:2px; font-weight:400;">thru ${res.matchStatus.throughHole}</div></div>
+    <div class="team-name t2" style="text-align:right">${escapeHtml(state.players[round.pairing[1][0]].name)}<br/>${escapeHtml(state.players[round.pairing[1][1]].name)}</div>
+  `;
+  view.appendChild(bar);
+
+  // Tees card — replaces old "Handicaps today"
+  const teesCard = el("div", "card");
+  teesCard.innerHTML = `
+    <h2>Tees & Course Handicaps</h2>
+    <div class="muted" style="margin-bottom:8px;">Pick each player's tees before the round. Course Handicap = round(HI × Slope ÷ 113 + (Rating − Par)).</div>
+    <div id="teesList"></div>
+    <div class="bulk-bar">
+      <span class="muted">Set all to:</span>
+      ${course.tees.map((t, i) => `<button class="btn ghost small" data-bulktee="${i}">${escapeHtml(t.name)}</button>`).join("")}
+    </div>
+  `;
+  view.appendChild(teesCard);
+  const teesList = teesCard.querySelector("#teesList");
+  state.players.forEach((p, i) => {
+    const teeIdx = round.tees["p"+i] ?? course.defaultTee;
+    const tee = course.tees[teeIdx];
+    const ch = effectiveCourseHandicap(round, i);
+    const row = el("div", "tee-row");
+    row.innerHTML = `
+      <div class="tee-dot" style="background:${p.color}"></div>
+      <div class="tee-player">${escapeHtml(p.name)} <small>HI ${p.handicapIndex}</small></div>
+      <select class="tee-select" data-player="${i}">
+        ${course.tees.map((t, idx) => `<option value="${idx}" ${idx===teeIdx?"selected":""}>${escapeHtml(t.name)} (${t.rating}/${t.slope})</option>`).join("")}
+      </select>
+      <div class="tee-ch">${ch}<small>CH</small></div>
+    `;
+    teesList.appendChild(row);
+  });
+  teesList.querySelectorAll("select.tee-select").forEach(sel => {
+    sel.addEventListener("change", (e) => {
+      const i = parseInt(e.target.dataset.player, 10);
+      round.tees["p"+i] = parseInt(e.target.value, 10);
+      saveState();
+      renderRoundDetail(view);
+    });
+  });
+  teesCard.querySelectorAll("button[data-bulktee]").forEach(btn => {
+    btn.onclick = () => {
+      const idx = parseInt(btn.dataset.bulktee, 10);
+      [0,1,2,3].forEach(i => round.tees["p"+i] = idx);
+      saveState();
+      renderRoundDetail(view);
+      toast(`All to ${course.tees[idx].name}`);
+    };
+  });
+
+  const card = el("div", "card");
+  card.innerHTML = `<h2>Scorecard — ${fmt.label}</h2>`;
+  card.appendChild(buildScorecard(round, res));
+  view.appendChild(card);
+
+  if (fmt.mode === "individual") {
+    const ind = el("div", "card");
+    ind.innerHTML = `<h2>Individual Stableford</h2>`;
+    state.players.forEach((p, i) => {
+      const row = el("div", "lb-row");
+      const birdies = res.playerTotals.birdies[i];
+      const team = round.pairing[0].includes(i) ? 0 : 1;
+      const ch = effectiveCourseHandicap(round, i);
+      const tee = playerTeeForRound(round, i);
+      row.innerHTML = `
+        <div class="lb-rank">${team === 0 ? "①" : "②"}</div>
+        <div class="avatar" style="background:${p.color}">${initialsOf(p.name)}</div>
+        <div>
+          <div class="lb-name">${escapeHtml(p.name)} <span class="muted">· ${escapeHtml(tee.name)} · CH ${ch}</span></div>
+          <div class="lb-meta">Gross ${res.playerTotals.gross[i] || "—"} · ${birdies} 🐦</div>
+        </div>
+        <div class="lb-points">${res.playerTotals.stableford[i]}<small>pts</small></div>
+      `;
+      ind.appendChild(row);
+    });
+    view.appendChild(ind);
+  }
+}
+
+function buildScorecard(round, res) {
+  const wrap = el("div", "score-grid");
+  const head = el("div", "sc-head");
+
+  const fmt = FORMATS[round.format];
+  const isIndividual = fmt.mode === "individual";
+
+  if (isIndividual) {
+    head.innerHTML = `
+      <div>H</div><div>P</div><div>SI</div>
+      ${state.players.map(p => `<div style="color:${p.color}">${escapeHtml(p.name.replace(/\./g,''))}</div>`).join("")}
+    `;
+  } else {
+    head.style.gridTemplateColumns = "28px 28px 28px 1fr 1fr";
+    head.innerHTML = `
+      <div>H</div><div>P</div><div>SI</div>
+      <div style="color:#3b71ba">Team 1</div>
+      <div style="color:#c6662e">Team 2</div>
+    `;
+  }
+  wrap.appendChild(head);
+
+  for (let h = 0; h < 18; h++) {
+    const hole = round.holes[h];
+    const row = el("div", "sc-row");
+    if (!isIndividual) row.style.gridTemplateColumns = "28px 28px 28px 1fr 1fr";
+
+    if (isIndividual) {
+      row.innerHTML = `
+        <div class="sc-cell"><b>${h+1}</b></div>
+        <div class="sc-cell sc-par">${hole.par}</div>
+        <div class="sc-cell sc-si">${hole.si}</div>
+        ${state.players.map((p, pi) => {
+          const team = round.pairing[0].includes(pi) ? "team1-bg" : "team2-bg";
+          const val = round.scores["p"+pi][h];
+          const cls = scoreClass(val, hole.par);
+          return `<div class="sc-cell ${team}"><input type="number" inputmode="numeric" min="1" max="15" class="sc-input ${cls}" data-player="${pi}" data-hole="${h}" value="${val ?? ""}" /></div>`;
+        }).join("")}
+      `;
+    } else {
+      const t1 = round.teamScores.t1[h];
+      const t2 = round.teamScores.t2[h];
+      row.innerHTML = `
+        <div class="sc-cell"><b>${h+1}</b></div>
+        <div class="sc-cell sc-par">${hole.par}</div>
+        <div class="sc-cell sc-si">${hole.si}</div>
+        <div class="sc-cell team1-bg"><input type="number" inputmode="numeric" min="1" max="15" class="sc-input ${scoreClass(t1, hole.par)}" data-team="1" data-hole="${h}" value="${t1 ?? ""}" /></div>
+        <div class="sc-cell team2-bg"><input type="number" inputmode="numeric" min="1" max="15" class="sc-input ${scoreClass(t2, hole.par)}" data-team="2" data-hole="${h}" value="${t2 ?? ""}" /></div>
+      `;
+    }
+    wrap.appendChild(row);
+
+    if (h === 8 || h === 17) {
+      const tot = el("div", "sc-row totals");
+      if (!isIndividual) tot.style.gridTemplateColumns = "28px 28px 28px 1fr 1fr";
+      const start = h === 8 ? 0 : 9;
+      const end = h + 1;
+      const parSum = round.holes.slice(start, end).reduce((a,x) => a + x.par, 0);
+      if (isIndividual) {
+        const sums = state.players.map((p, pi) =>
+          round.scores["p"+pi].slice(start, end).reduce((a,v) => a + (v||0), 0)
+        );
+        tot.innerHTML = `
+          <div></div><div>${parSum}</div><div></div>
+          ${sums.map(s => `<div>${s || "—"}</div>`).join("")}
+        `;
+      } else {
+        const s1 = round.teamScores.t1.slice(start, end).reduce((a,v) => a + (v||0), 0);
+        const s2 = round.teamScores.t2.slice(start, end).reduce((a,v) => a + (v||0), 0);
+        tot.innerHTML = `
+          <div></div><div>${parSum}</div><div></div>
+          <div>${s1 || "—"}</div><div>${s2 || "—"}</div>
+        `;
+      }
+      wrap.appendChild(tot);
+    }
+  }
+
+  wrap.querySelectorAll(".sc-input").forEach(inp => {
+    inp.addEventListener("input", (e) => {
+      const val = e.target.value === "" ? null : parseInt(e.target.value, 10);
+      if (val != null && (isNaN(val) || val < 1)) return;
+      const h = parseInt(e.target.dataset.hole, 10);
+      if (e.target.dataset.player != null) {
+        const p = parseInt(e.target.dataset.player, 10);
+        round.scores["p"+p][h] = val;
+      } else {
+        const t = e.target.dataset.team;
+        round.teamScores["t"+t][h] = val;
+      }
+      saveState();
+    });
+    inp.addEventListener("blur", () => {
+      const view = document.getElementById("view");
+      renderRoundDetail(view);
+    });
+  });
+
+  return wrap;
+}
+
+function scoreClass(gross, par) {
+  if (gross == null) return "";
+  const d = gross - par;
+  if (d <= -2) return "eagle";
+  if (d === -1) return "bird";
+  if (d === 0)  return "par";
+  if (d === 1)  return "bogey";
+  return "dbogey";
+}
+
+function renderPots(view) {
+  document.getElementById("topTitle").textContent = "Side Pots";
+  document.getElementById("topSub").textContent = "Birdies · Longest Drive · Closest to Pin";
+  view.innerHTML = "";
+
+  const totals = computeCup();
+  const totalBirdies = totals.reduce((a,t) => a + t.birdies, 0);
+  const totalPot = totalBirdies * state.pots.birdieBuyIn;
+  const bp = el("div", "card");
+  bp.innerHTML = `
+    <h2>Birdie Pool</h2>
+    <div class="pot-summary">
+      <div class="muted">$${state.pots.birdieBuyIn}/birdie · ${totalBirdies} birdies so far</div>
+      <div class="amt">$${totalPot}</div>
+    </div>
+    <div class="pot-list">
+      ${totals.map(t => `
+        <div class="pot-row">
+          <div><span class="avatar" style="background:${t.color}; width:20px; height:20px; font-size:10px; display:inline-flex; vertical-align:middle; margin-right:6px;">${initialsOf(t.name)}</span>${escapeHtml(t.name)}</div>
+          <div>${t.birdies} 🐦 · $${t.birdies * state.pots.birdieBuyIn}</div>
+        </div>
+      `).join("")}
+    </div>
+    <div class="muted" style="margin-top:10px;">Pot splits proportionally among birdie makers at the end.</div>
+    <div class="field" style="margin-top:10px;">
+      <label>Buy-in per birdie ($)</label>
+      <input type="number" min="0" step="1" value="${state.pots.birdieBuyIn}" id="birdieBuy" />
+    </div>
+  `;
+  view.appendChild(bp);
+  bp.querySelector("#birdieBuy").addEventListener("change", (e) => {
+    state.pots.birdieBuyIn = Math.max(0, parseInt(e.target.value, 10) || 0);
+    saveState();
+    render();
+  });
+
+  const ld = el("div", "card");
+  ld.innerHTML = `<h2>Longest Drive</h2><div class="muted">One nominated hole per round</div>`;
+  state.rounds.forEach(r => {
+    const holeOpts = [-1, ...Array.from({length:18}, (_,i) => i+1)]
+      .filter(n => n === -1 || r.holes[n-1].par > 3)
+      .map(n => n === -1 ? `<option value="">—</option>` : `<option value="${n}" ${state.pots.longestDriveHoles[r.id]==n?"selected":""}>Hole ${n} (par ${r.holes[n-1].par})</option>`)
+      .join("");
+    const winnerOpts = `<option value="">—</option>` + state.players.map((p,i) => `<option value="${i}" ${state.pots.longestDriveWinners[r.id]==i?"selected":""}>${escapeHtml(p.name)}</option>`).join("");
+    const row = el("div", "hole-select");
+    row.innerHTML = `
+      <div><b>${escapeHtml(r.name)}</b><div class="muted" style="font-size:11px;">${r.session}</div></div>
+      <select class="inline" data-round="${r.id}" data-kind="ldHole">${holeOpts}</select>
+      <select class="inline" data-round="${r.id}" data-kind="ldWin">${winnerOpts}</select>
+    `;
+    ld.appendChild(row);
+  });
+  view.appendChild(ld);
+
+  const cp = el("div", "card");
+  cp.innerHTML = `<h2>Closest to Pin</h2><div class="muted">One par 3 per round</div>`;
+  state.rounds.forEach(r => {
+    const par3s = r.holes.map((h,i) => ({h: i+1, par: h.par})).filter(x => x.par === 3);
+    const holeOpts = `<option value="">—</option>` + par3s.map(o => `<option value="${o.h}" ${state.pots.closestPinHoles[r.id]==o.h?"selected":""}>Hole ${o.h}</option>`).join("");
+    const winnerOpts = `<option value="">—</option>` + state.players.map((p,i) => `<option value="${i}" ${state.pots.closestPinWinners[r.id]==i?"selected":""}>${escapeHtml(p.name)}</option>`).join("");
+    const row = el("div", "hole-select");
+    row.innerHTML = `
+      <div><b>${escapeHtml(r.name)}</b><div class="muted" style="font-size:11px;">${r.session}</div></div>
+      <select class="inline" data-round="${r.id}" data-kind="cpHole">${holeOpts}</select>
+      <select class="inline" data-round="${r.id}" data-kind="cpWin">${winnerOpts}</select>
+    `;
+    cp.appendChild(row);
+  });
+  view.appendChild(cp);
+
+  view.querySelectorAll("select.inline").forEach(sel => {
+    sel.addEventListener("change", (e) => {
+      const rid = e.target.dataset.round;
+      const k = e.target.dataset.kind;
+      const v = e.target.value === "" ? null : parseInt(e.target.value, 10);
+      if (k === "ldHole") v == null ? delete state.pots.longestDriveHoles[rid] : state.pots.longestDriveHoles[rid] = v;
+      if (k === "ldWin")  v == null ? delete state.pots.longestDriveWinners[rid] : state.pots.longestDriveWinners[rid] = v;
+      if (k === "cpHole") v == null ? delete state.pots.closestPinHoles[rid] : state.pots.closestPinHoles[rid] = v;
+      if (k === "cpWin")  v == null ? delete state.pots.closestPinWinners[rid] : state.pots.closestPinWinners[rid] = v;
+      saveState();
+    });
+  });
+
+  const tally = el("div", "card");
+  const ldCounts = [0,0,0,0], cpCounts = [0,0,0,0];
+  Object.values(state.pots.longestDriveWinners).forEach(i => { if (i != null) ldCounts[i]++; });
+  Object.values(state.pots.closestPinWinners).forEach(i => { if (i != null) cpCounts[i]++; });
+  tally.innerHTML = `<h2>Side-pot tally</h2>`;
+  state.players.forEach((p, i) => {
+    const row = el("div", "pot-row");
+    row.innerHTML = `
+      <div>${escapeHtml(p.name)}</div>
+      <div>${ldCounts[i]} LD · ${cpCounts[i]} CP</div>
+    `;
+    tally.appendChild(row);
+  });
+  view.appendChild(tally);
+}
+
+function renderSetup(view) {
+  document.getElementById("topTitle").textContent = "Setup";
+  document.getElementById("topSub").textContent = "Handicap indexes, pairings, formats";
+  view.innerHTML = "";
+
+  const pl = el("div", "card");
+  pl.innerHTML = `<h2>Players</h2><div class="muted" style="margin-bottom:10px;">Set each player's Handicap Index (HI) once. The app computes course handicap per round from the tees you pick.</div>`;
+  state.players.forEach((p, i) => {
+    const row = el("div", "field row");
+    row.innerHTML = `
+      <div>
+        <label>Name</label>
+        <input type="text" value="${escapeAttr(p.name)}" data-p="${i}" data-k="name" />
+      </div>
+      <div>
+        <label>Handicap Idx</label>
+        <input type="number" step="0.1" value="${p.handicapIndex}" data-p="${i}" data-k="handicapIndex" />
+      </div>
+    `;
+    pl.appendChild(row);
+  });
+  pl.querySelectorAll("input").forEach(inp => {
+    inp.addEventListener("change", (e) => {
+      const i = parseInt(e.target.dataset.p, 10);
+      const k = e.target.dataset.k;
+      if (k === "name") state.players[i].name = e.target.value.trim() || ("Player " + (i+1));
+      if (k === "handicapIndex") state.players[i].handicapIndex = parseFloat(e.target.value) || 0;
+      saveState();
+      render();
+    });
+  });
+  view.appendChild(pl);
+
+  // Rounds card — shows configured format, pairing, and tee summary
+  const rd = el("div", "card");
+  rd.innerHTML = `<h2>Rounds</h2><div class="muted" style="margin-bottom:10px;">Tees live on the round detail page; format and pairing here.</div>`;
+  state.rounds.forEach((r, idx) => {
+    const course = DEFAULT_COURSES[r.course];
+    const teeNames = [0,1,2,3].map(i => course.tees[r.tees["p"+i] ?? course.defaultTee].name);
+    const uniqueTees = [...new Set(teeNames)];
+    const teeSummary = uniqueTees.length === 1 ? `all from ${uniqueTees[0]}` : teeNames.join(" / ");
+    const block = el("div", "");
+    block.style.paddingBottom = "12px";
+    block.style.marginBottom = "12px";
+    block.style.borderBottom = "1px solid #f0ecdf";
+    block.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+        <b>Round ${idx+1} · ${escapeHtml(r.name)}</b>
+        <span class="badge ${r.status}">${r.status}</span>
+      </div>
+      <div class="muted" style="margin-bottom:8px;">${r.session} · Tees: ${escapeHtml(teeSummary)}</div>
+      <div class="field">
+        <label>Format</label>
+        <select data-round="${r.id}" data-k="format">
+          ${Object.entries(FORMATS).map(([k,v]) => `<option value="${k}" ${r.format===k?"selected":""}>${v.label}</option>`).join("")}
+        </select>
+      </div>
+      <div class="field">
+        <label>Pairing</label>
+        <select data-round="${r.id}" data-k="pairing">
+          <option value="0,1|2,3" ${pairKey(r.pairing)==="0,1|2,3"?"selected":""}>${state.players[0].name}+${state.players[1].name}  vs  ${state.players[2].name}+${state.players[3].name}</option>
+          <option value="0,2|1,3" ${pairKey(r.pairing)==="0,2|1,3"?"selected":""}>${state.players[0].name}+${state.players[2].name}  vs  ${state.players[1].name}+${state.players[3].name}</option>
+          <option value="0,3|1,2" ${pairKey(r.pairing)==="0,3|1,2"?"selected":""}>${state.players[0].name}+${state.players[3].name}  vs  ${state.players[1].name}+${state.players[2].name}</option>
+        </select>
+      </div>
+    `;
+    rd.appendChild(block);
+  });
+  rd.querySelectorAll("select").forEach(sel => {
+    sel.addEventListener("change", (e) => {
+      const r = state.rounds.find(x => x.id === e.target.dataset.round);
+      const k = e.target.dataset.k;
+      if (k === "format") r.format = e.target.value;
+      if (k === "pairing") {
+        const [a, b] = e.target.value.split("|").map(s => s.split(",").map(Number));
+        r.pairing = [a, b];
+      }
+      saveState();
+      render();
+    });
+  });
+  view.appendChild(rd);
+
+  // Course info
+  const ci = el("div", "card");
+  ci.innerHTML = `<h2>Course tees (reference)</h2><div class="muted" style="margin-bottom:10px;">Rating/slope values are estimates — verify against the pro shop if you want precision.</div>`;
+  Object.values(DEFAULT_COURSES).forEach(c => {
+    const hasVariablePar = c.tees.some(t => t.par != null && t.par !== c.par);
+    const list = c.tees.map(t => {
+      const parTag = t.par != null && t.par !== c.par ? ` p${t.par}` : "";
+      return `${t.name}: ${t.rating}/${t.slope}${parTag}`;
+    }).join(" · ");
+    const parLabel = hasVariablePar ? `par ${c.par} (varies by tee)` : `par ${c.par}`;
+    const row = el("div", "pot-row");
+    row.innerHTML = `<div><b>${escapeHtml(c.name)}</b> <span class="muted">${parLabel}</span></div><div style="font-size:11px; color:#6f7a62; text-align:right; max-width:55%;">${escapeHtml(list)}</div>`;
+    ci.appendChild(row);
+  });
+  view.appendChild(ci);
+
+  const dz = el("div", "card");
+  dz.innerHTML = `
+    <h2>Danger zone</h2>
+    <div class="muted" style="margin-bottom:10px;">Reset clears every score, pairing edit, tee selection, and side pot.</div>
+    <button class="btn danger" id="resetBtn">Reset everything</button>
+  `;
+  dz.querySelector("#resetBtn").onclick = resetState;
+  view.appendChild(dz);
+}
+
+function pairKey(pairing) {
+  return pairing.map(t => t.slice().sort().join(",")).sort().join("|");
+}
+
+function el(tag, cls) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  return e;
+}
+function initialsOf(name) {
+  const clean = name.replace(/\./g,'').trim();
+  const parts = clean.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return clean.slice(0,2).toUpperCase();
+}
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[c]));
+}
+function escapeAttr(s) { return escapeHtml(s); }
+let toastTimer = null;
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 1800);
+}
+
+document.querySelectorAll("nav.tabs button").forEach(b => {
+  b.addEventListener("click", () => {
+    ui.tab = b.dataset.tab;
+    render();
+    window.scrollTo({top:0, behavior:"smooth"});
+  });
+});
+
+render();
+</script>
+</body>
+</html>

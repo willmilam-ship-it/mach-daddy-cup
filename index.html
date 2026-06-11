@@ -1351,8 +1351,17 @@ function persistSyncMeta() {
 }
 
 function setDot(s) {
-  const d = document.getElementById("syncDot");
-  if (d) d.className = s === "live" ? "live" : (s === "sync" ? "sync" : "");
+  let d = document.getElementById("syncDot");
+  if (!d) {
+    // render() may rewrite the header line; re-create the dot
+    const sub = document.getElementById("topSub");
+    if (!sub) return;
+    d = document.createElement("span");
+    d.id = "syncDot";
+    d.title = "Live sync status";
+    sub.appendChild(d);
+  }
+  d.className = s === "live" ? "live" : (s === "sync" ? "sync" : "");
 }
 
 function schedulePush() {

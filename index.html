@@ -200,11 +200,26 @@
     align-items: center; font-size: 13px;
   }
   .hole-select:last-child { border-bottom: 0; }
+  .hole-select.ld { grid-template-columns: 1fr auto auto auto; }
   select.inline {
     padding: 4px 6px; font-size: 12px;
     border: 1px solid #d8d2bd; border-radius: 6px;
     background: #fff; font-family: inherit;
   }
+  input.dist {
+    width: 58px; padding: 4px 6px; font-size: 12px;
+    border: 1px solid #d8d2bd; border-radius: 6px;
+    background: #fff; font-family: inherit; text-align: right;
+  }
+  .ref-table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+  .ref-table th, .ref-table td { padding: 3px 4px; text-align: center; border-bottom: 1px solid #f0ecdf; }
+  .ref-table th { color: #6f7a62; font-weight: 600; font-size: 10.5px; text-transform: uppercase; }
+  .ref-table td:first-child, .ref-table th:first-child { text-align: left; font-weight: 700; }
+  .ref-table tr.sum td { font-weight: 700; background: #faf8f2; }
+  .ref-table td.eagle { color: #b45309; font-weight: 800; }
+  .ref-table td.bird { color: #b91c1c; font-weight: 700; }
+  .ref-table td.bogey { color: #475569; }
+  .ref-table td.dbogey { color: #94a3b8; }
   .back {
     appearance: none; background: transparent; border: 0;
     color: #3a5024; font-weight: 600; padding: 4px 0;
@@ -264,6 +279,7 @@
 <nav class="tabs">
   <button data-tab="leaderboard" class="active"><span class="ico">🏆</span>Cup</button>
   <button data-tab="rounds"><span class="ico">🏌️</span>Rounds</button>
+  <button data-tab="scores"><span class="ico">📋</span>Scores</button>
   <button data-tab="pots"><span class="ico">💰</span>Pots</button>
   <button data-tab="setup"><span class="ico">⚙️</span>Setup</button>
 </nav>
@@ -419,6 +435,7 @@ const DEFAULT_STATE = {
     birdieBuyIn: 5,
     longestDriveHoles: {},
     longestDriveWinners: {},
+    longestDriveDistance: {},
     closestPinHoles: {},
     closestPinWinners: {},
   }
@@ -444,6 +461,7 @@ function loadState() {
     s.pots = s.pots || DEFAULT_STATE.pots;
     s.pots.longestDriveHoles = s.pots.longestDriveHoles || {};
     s.pots.longestDriveWinners = s.pots.longestDriveWinners || {};
+    s.pots.longestDriveDistance = s.pots.longestDriveDistance || {};
     s.pots.closestPinHoles = s.pots.closestPinHoles || {};
     s.pots.closestPinWinners = s.pots.closestPinWinners || {};
     // Migration: ensure tees on each round
@@ -808,6 +826,7 @@ function render() {
   const view = document.getElementById("view");
   if (ui.tab === "leaderboard") renderLeaderboard(view);
   else if (ui.tab === "rounds") renderRounds(view);
+  else if (ui.tab === "scores") renderScores(view);
   else if (ui.tab === "pots") renderPots(view);
   else if (ui.tab === "setup") renderSetup(view);
 }
@@ -1198,11 +1217,13 @@ function renderPots(view) {
       .map(n => n === -1 ? `<option value="">—</option>` : `<option value="${n}" ${state.pots.longestDriveHoles[r.id]==n?"selected":""}>Hole ${n} (par ${r.holes[n-1].par})</option>`)
       .join("");
     const winnerOpts = `<option value="">—</option>` + state.players.map((p,i) => `<option value="${i}" ${state.pots.longestDriveWinners[r.id]==i?"selected":""}>${escapeHtml(p.name)}</option>`).join("");
-    const row = el("div", "hole-select");
+    const distVal = state.pots.longestDriveDistance[r.id];
+    const row = el("div", "hole-select ld");
     row.innerHTML = `
       <div><b>${escapeHtml(r.name)}</b><div class="muted" style="font-size:11px;">${r.session}</div></div>
       <select class="inline" data-round="${r.id}" data-kind="ldHole">${holeOpts}</select>
       <select class="inline" data-round="${r.id}" data-kind="ldWin">${winnerOpts}</select>
+      <input class="dist" type="number" inputmode="numeric" min="0" max="500" placeholder="yds" data-round="${r.id}" data-kind="ldDist" value="${distVal != null ? distVal : ""}" />
     `;
     ld.appendChild(row);
   });
@@ -1224,13 +1245,14 @@ function renderPots(view) {
   });
   view.appendChild(cp);
 
-  view.querySelectorAll("select.inline").forEach(sel => {
+  view.querySelectorAll("select.inline, input.dist").forEach(sel => {
     sel.addEventListener("change", (e) => {
       const rid = e.target.dataset.round;
       const k = e.target.dataset.kind;
       const v = e.target.value === "" ? null : parseInt(e.target.value, 10);
       if (k === "ldHole") v == null ? delete state.pots.longestDriveHoles[rid] : state.pots.longestDriveHoles[rid] = v;
       if (k === "ldWin")  v == null ? delete state.pots.longestDriveWinners[rid] : state.pots.longestDriveWinners[rid] = v;
+      if (k === "ldDist") v == null ? delete state.pots.longestDriveDistance[rid] : state.pots.longestDriveDistance[rid] = v;
       if (k === "cpHole") v == null ? delete state.pots.closestPinHoles[rid] : state.pots.closestPinHoles[rid] = v;
       if (k === "cpWin")  v == null ? delete state.pots.closestPinWinners[rid] : state.pots.closestPinWinners[rid] = v;
       saveState();
@@ -1251,6 +1273,57 @@ function renderPots(view) {
     tally.appendChild(row);
   });
   view.appendChild(tally);
+}
+
+function renderScores(view) {
+  document.getElementById("topTitle").textContent = "Scorecards";
+  document.getElementById("topSub").textContent = "Every round · every hole · gross scores";
+  view.innerHTML = "";
+
+  state.rounds.forEach((r, idx) => {
+    const fmt = FORMATS[r.format];
+    const res = computeRound(r);
+    const card = el("div", "card");
+    let head, rowFor, sums;
+
+    if (fmt.mode === "individual") {
+      head = state.players.map(p => `<th>${escapeHtml(initialsOf(p.name))}</th>`).join("");
+      rowFor = h => [0,1,2,3].map(p => {
+        const g = r.scores["p"+p][h];
+        return `<td class="${scoreClass(g, r.holes[h].par)}">${g != null ? g : "·"}</td>`;
+      }).join("");
+      sums = (from, to) => [0,1,2,3].map(p => {
+        const vals = r.scores["p"+p].slice(from, to).filter(v => v != null);
+        return `<td>${vals.length ? vals.reduce((a,b)=>a+b,0) : "·"}</td>`;
+      }).join("");
+    } else {
+      head = `<th>Team 1</th><th>Team 2</th>`;
+      rowFor = h => ["t1","t2"].map(t => {
+        const g = r.teamScores[t][h];
+        return `<td class="${scoreClass(g, r.holes[h].par)}">${g != null ? g : "·"}</td>`;
+      }).join("");
+      sums = (from, to) => ["t1","t2"].map(t => {
+        const vals = r.teamScores[t].slice(from, to).filter(v => v != null);
+        return `<td>${vals.length ? vals.reduce((a,b)=>a+b,0) : "·"}</td>`;
+      }).join("");
+    }
+
+    const bodyRows = r.holes.map((hole, h) => {
+      const out = h === 9 ? `<tr class="sum"><td>OUT</td><td>${r.holes.slice(0,9).reduce((a,x)=>a+x.par,0)}</td>${sums(0,9)}</tr>` : "";
+      return out + `<tr><td>${h+1}</td><td>${hole.par}</td>${rowFor(h)}</tr>`;
+    }).join("");
+
+    card.innerHTML = `
+      <h2>R${idx+1} · ${escapeHtml(r.name)} <span class="muted" style="font-weight:400; font-size:11px;">${fmt.label}${res.matchStatus.result ? " · " + escapeHtml(res.matchStatus.result) : ""}</span></h2>
+      <table class="ref-table">
+        <tr><th>H</th><th>Par</th>${head}</tr>
+        ${bodyRows}
+        <tr class="sum"><td>IN</td><td>${r.holes.slice(9).reduce((a,x)=>a+x.par,0)}</td>${sums(9,18)}</tr>
+        <tr class="sum"><td>TOT</td><td>${r.par}</td>${sums(0,18)}</tr>
+      </table>
+    `;
+    view.appendChild(card);
+  });
 }
 
 function renderSetup(view) {

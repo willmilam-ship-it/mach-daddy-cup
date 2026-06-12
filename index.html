@@ -514,7 +514,7 @@ function loadState() {
       // Fortrose tee time corrected to 4:06 PM (idempotent, runs every load)
       if (r.id === "r4" && r.session) r.session = r.session.replace("2:06 PM", "4:06 PM");
       // Format change (Jun 2026): rounds 1/3/5 four-ball match play, 2/4 four-ball
-      // aggregate match (sum of both nets), 6 individual Stableford (3/2/1/0 cup pts).
+      // aggregate match (sum of both nets), 6 individual Stableford (points count directly).
       if (r._fmtV9 !== true) {
         const fmtMap = { r1: "fourball-match", r2: "fourball-aggregate-match", r3: "fourball-match",
                          r4: "fourball-aggregate-match", r5: "fourball-match", r6: "individual-stableford" };
@@ -623,6 +623,8 @@ function computeRound(round) {
 
   let holesPlayed = 0;
   let matchNet = 0;
+  // Per-hole match result: 1 = Team 1 won, -1 = Team 2 won, 0 = tied, null = not played
+  const holeResults = Array(18).fill(null);
 
   for (let h = 0; h < 18; h++) {
     const { par, si } = round.holes[h];
@@ -664,8 +666,9 @@ function computeRound(round) {
       holeData.teamPts = [t1BestPts, t2BestPts];
 
       if (fmt.resultType === "match" && t1BestNet != null && t2BestNet != null) {
-        if (t1BestNet < t2BestNet) matchNet += 1;
-        else if (t2BestNet < t1BestNet) matchNet -= 1;
+        if (t1BestNet < t2BestNet) { matchNet += 1; holeResults[h] = 1; }
+        else if (t2BestNet < t1BestNet) { matchNet -= 1; holeResults[h] = -1; }
+        else holeResults[h] = 0;
         holesPlayed = h + 1;
         result.teamTotals.gross[0] += t1BestGross;
         result.teamTotals.gross[1] += t2BestGross;
@@ -678,8 +681,9 @@ function computeRound(round) {
           const a1 = t1.reduce((s, p) => s + holeData.playerNet[p], 0);
           const a2 = t2.reduce((s, p) => s + holeData.playerNet[p], 0);
           holeData.teamNet = [a1, a2];
-          if (a1 < a2) matchNet += 1;
-          else if (a2 < a1) matchNet -= 1;
+          if (a1 < a2) { matchNet += 1; holeResults[h] = 1; }
+          else if (a2 < a1) { matchNet -= 1; holeResults[h] = -1; }
+          else holeResults[h] = 0;
           holesPlayed = h + 1;
           result.teamTotals.gross[0] += t1.reduce((s, p) => s + holeData.playerGross[p], 0);
           result.teamTotals.gross[1] += t2.reduce((s, p) => s + holeData.playerGross[p], 0);
@@ -717,8 +721,9 @@ function computeRound(round) {
       if (t2 != null) result.teamTotals.stableford[1] += stablefordPoints(t2, par, t2Strokes);
 
       if (fmt.resultType === "match" && t1Net != null && t2Net != null) {
-        if (t1Net < t2Net) matchNet += 1;
-        else if (t2Net < t1Net) matchNet -= 1;
+        if (t1Net < t2Net) { matchNet += 1; holeResults[h] = 1; }
+        else if (t2Net < t1Net) { matchNet -= 1; holeResults[h] = -1; }
+        else holeResults[h] = 0;
         holesPlayed = h + 1;
       }
       if (fmt.resultType === "medal" && t1 != null && t2 != null) {
@@ -773,25 +778,61 @@ function computeRound(round) {
     }
   }
 
+  // ---- Mach Daddy point system (Jun 2026) ----
+  // Rounds 1-5 (matches): 1 pt per hole won, 1 pt per nine won (front 1-9 /
+  // back 10-18), 1 pt for the 18-hole match. Any tie = 0.5 pt per team.
+  // Points accrue live as holes are entered. Each player is credited with
+  // their team's points.
+  // Round 6 (finale): each player's Stableford points count DIRECTLY toward
+  // their cup total — the finale deliberately outweighs the matches.
   const perPlayer = [0,0,0,0];
   result.winners = [];
-  if (result.complete && fmt.resultType === "individual") {
-    // Finale pays 3/2/1/0 by Stableford rank; ties share the better rank's points
-    const ranked = result.individualRanking;
-    const award = [3, 2, 1, 0];
-    let pos = 0;
-    while (pos < 4) {
-      let end = pos;
-      while (end + 1 < 4 && ranked[end + 1].p === ranked[pos].p) end++;
-      for (let k = pos; k <= end; k++) perPlayer[ranked[k].i] = award[pos];
-      pos = end + 1;
+  if (fmt.resultType === "individual") {
+    for (let i = 0; i < 4; i++) perPlayer[i] = result.playerTotals.stableford[i];
+    if (result.complete) {
+      const ranked = result.individualRanking;
+      result.winners = ranked.filter(r => r.p === ranked[0].p).map(r => r.i);
     }
-    result.winners = ranked.filter(r => r.p === ranked[0].p).map(r => r.i);
+  } else if (fmt.resultType === "match" || fmt.resultType === "aggregate-match") {
+    const bd = { hole: [0,0], nine: [0,0], match: [0,0] };
+    holeResults.forEach(hr => {
+      if (hr === 1) bd.hole[0] += 1;
+      else if (hr === -1) bd.hole[1] += 1;
+      else if (hr === 0) { bd.hole[0] += 0.5; bd.hole[1] += 0.5; }
+    });
+    [[0,9],[9,18]].forEach(([s,e]) => {
+      const nine = holeResults.slice(s, e);
+      if (nine.every(hr => hr != null)) {
+        const w1 = nine.filter(hr => hr === 1).length;
+        const w2 = nine.filter(hr => hr === -1).length;
+        if (w1 > w2) bd.nine[0] += 1;
+        else if (w2 > w1) bd.nine[1] += 1;
+        else { bd.nine[0] += 0.5; bd.nine[1] += 0.5; }
+      }
+    });
+    if (result.complete) {
+      if (matchNet > 0) bd.match[0] += 1;
+      else if (matchNet < 0) bd.match[1] += 1;
+      else { bd.match[0] += 0.5; bd.match[1] += 0.5; }
+    }
+    result.pointsBreakdown = bd;
+    result.teamPoints = [
+      bd.hole[0] + bd.nine[0] + bd.match[0],
+      bd.hole[1] + bd.nine[1] + bd.match[1],
+    ];
+    round.pairing[0].forEach(p => perPlayer[p] = result.teamPoints[0]);
+    round.pairing[1].forEach(p => perPlayer[p] = result.teamPoints[1]);
+    if (result.complete && result.matchStatus.result) {
+      const r = result.matchStatus.result;
+      if (/Team 1 wins/.test(r)) result.winners = round.pairing[0].slice();
+      else if (/Team 2 wins/.test(r)) result.winners = round.pairing[1].slice();
+    }
   } else if (result.complete && result.matchStatus.result) {
+    // Fallback for medal/team-Stableford formats: 1 pt win, 0.5 tie
     const r = result.matchStatus.result;
-    if (/Team 1 wins/.test(r)) { round.pairing[0].forEach(p => perPlayer[p] = 2); result.winners = round.pairing[0].slice(); }
-    else if (/Team 2 wins/.test(r)) { round.pairing[1].forEach(p => perPlayer[p] = 2); result.winners = round.pairing[1].slice(); }
-    else if (/halved|Tied/i.test(r)) round.pairing.flat().forEach(p => perPlayer[p] = 1);
+    if (/Team 1 wins/.test(r)) { round.pairing[0].forEach(p => perPlayer[p] = 1); result.winners = round.pairing[0].slice(); }
+    else if (/Team 2 wins/.test(r)) { round.pairing[1].forEach(p => perPlayer[p] = 1); result.winners = round.pairing[1].slice(); }
+    else if (/halved|Tied/i.test(r)) round.pairing.flat().forEach(p => perPlayer[p] = 0.5);
   }
   result.perPlayerPoints = perPlayer;
 
@@ -1019,12 +1060,12 @@ function renderRoundDetail(view) {
   const bar = el("div", "match-bar");
   if (fmt.resultType === "individual") {
     bar.innerHTML = `
-      <div class="match-status" style="flex:1; text-align:center;">${res.matchStatus.result || indivHeading(res) || "Not started"}<div class="muted" style="font-size:11px; margin-top:2px; font-weight:400;">thru ${res.matchStatus.throughHole} · 1st 3pts · 2nd 2 · 3rd 1</div></div>
+      <div class="match-status" style="flex:1; text-align:center;">${res.matchStatus.result || indivHeading(res) || "Not started"}<div class="muted" style="font-size:11px; margin-top:2px; font-weight:400;">thru ${res.matchStatus.throughHole} · Stableford pts count toward Cup total</div></div>
     `;
   } else {
     bar.innerHTML = `
       <div class="team-name t1">${escapeHtml(state.players[round.pairing[0][0]].name)}<br/>${escapeHtml(state.players[round.pairing[0][1]].name)}</div>
-      <div class="match-status">${res.matchStatus.result || matchHeading(res) || "Not started"}<div class="muted" style="font-size:11px; margin-top:2px; font-weight:400;">thru ${res.matchStatus.throughHole}</div></div>
+      <div class="match-status">${res.matchStatus.result || matchHeading(res) || "Not started"}<div class="muted" style="font-size:11px; margin-top:2px; font-weight:400;">thru ${res.matchStatus.throughHole}${res.teamPoints ? ` · pts ${res.teamPoints[0]}–${res.teamPoints[1]}` : ""}</div></div>
       <div class="team-name t2" style="text-align:right">${escapeHtml(state.players[round.pairing[1][0]].name)}<br/>${escapeHtml(state.players[round.pairing[1][1]].name)}</div>
     `;
   }

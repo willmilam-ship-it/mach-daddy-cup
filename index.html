@@ -616,6 +616,11 @@ function computeRound(round) {
 
   // Course handicaps for this round, driven by each player's tee selection
   const CH = [0,1,2,3].map(i => effectiveCourseHandicap(round, i));
+
+  // For four-ball match play, adjust handicaps relative to the best player in the group
+  const minCH = Math.min(...CH);
+  const adjustedCH = CH.map(ch => ch - minCH);
+
   let holesPlayed = 0;
   let matchNet = 0;
 
@@ -626,7 +631,7 @@ function computeRound(round) {
     if (fmt.mode === "individual") {
       for (let p = 0; p < 4; p++) {
         const gross = round.scores["p"+p][h];
-        const strokes = strokesOnHole(CH[p], si);
+        const strokes = strokesOnHole(adjustedCH[p], si);
         const net = gross != null ? gross - strokes : null;
         const pts = stablefordPoints(gross, par, strokes);
         holeData.playerGross[p] = gross;
@@ -697,10 +702,10 @@ function computeRound(round) {
       const t1 = round.teamScores.t1[h];
       const t2 = round.teamScores.t2[h];
       const [t1p, t2p] = round.pairing;
-      const t1CH = Math.min(CH[t1p[0]], CH[t1p[1]]);
-      const t2CH = Math.min(CH[t2p[0]], CH[t2p[1]]);
-      const t1Strokes = strokesOnHole(t1CH, si);
-      const t2Strokes = strokesOnHole(t2CH, si);
+      const t1AdjCH = Math.min(adjustedCH[t1p[0]], adjustedCH[t1p[1]]);
+      const t2AdjCH = Math.min(adjustedCH[t2p[0]], adjustedCH[t2p[1]]);
+      const t1Strokes = strokesOnHole(t1AdjCH, si);
+      const t2Strokes = strokesOnHole(t2AdjCH, si);
       const t1Net = t1 != null ? t1 - t1Strokes : null;
       const t2Net = t2 != null ? t2 - t2Strokes : null;
       holeData.teamGross = [t1, t2];

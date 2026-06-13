@@ -857,8 +857,8 @@ function computeCup() {
   return totals;
 }
 
-// Round 5 pairing is dynamic: after Round 4, the cup leader partners 4th place
-// and 2nd partners 3rd. Recomputed on every render until R5 scoring starts,
+// Round 5 pairing is dynamic: after Round 4, the top two players in the standings
+// partner against the bottom two. Recomputed on every render until R5 scoring starts,
 // then frozen. Deterministic on every device, so sync can't ping-pong.
 function syncDynamicPairing() {
   const r5 = state.rounds.find(r => r.id === "r5");
@@ -879,7 +879,7 @@ function syncDynamicPairing() {
   const ranked = totals
     .sort((a, b) => b.points - a.points || b.stableford - a.stableford || b.birdies - a.birdies || a.i - b.i)
     .map(t => t.i);
-  const newPairing = [[ranked[0], ranked[3]], [ranked[1], ranked[2]]];
+  const newPairing = [[ranked[0], ranked[1]], [ranked[2], ranked[3]]];
   if (JSON.stringify(newPairing) !== JSON.stringify(r5.pairing)) {
     r5.pairing = newPairing;
     saveState();
@@ -1492,7 +1492,7 @@ function renderSetup(view) {
       ${r.id === "r5" ? `
       <div class="field">
         <label>Pairing (automatic)</label>
-        <div class="muted" style="padding:4px 0;">Cup leader + 4th place vs 2nd + 3rd, based on standings after Round 4. Currently: <b>${escapeHtml(state.players[r.pairing[0][0]].name)}+${escapeHtml(state.players[r.pairing[0][1]].name)} vs ${escapeHtml(state.players[r.pairing[1][0]].name)}+${escapeHtml(state.players[r.pairing[1][1]].name)}</b>. Locks once R5 scoring starts.</div>
+        <div class="muted" style="padding:4px 0;">Top two vs bottom two, based on standings after Round 4. Currently: <b>${escapeHtml(state.players[r.pairing[0][0]].name)}+${escapeHtml(state.players[r.pairing[0][1]].name)} vs ${escapeHtml(state.players[r.pairing[1][0]].name)}+${escapeHtml(state.players[r.pairing[1][1]].name)}</b>. Locks once R5 scoring starts.</div>
       </div>
       ` : `
       <div class="field">

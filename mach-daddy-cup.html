@@ -1224,23 +1224,45 @@ function buildScorecard(round, res) {
     }
   }
 
+  // Always write to the CURRENT state's round (looked up by id), never a stale
+  // closure — otherwise a sync update that swaps `state` would orphan our writes
+  // and the entered score would vanish.
+  const roundId = round.id;
+  const liveRound = () => state.rounds.find(r => r.id === roundId) || round;
+
+  // Refresh totals / match bar / leaderboard shortly after the user STOPS
+  // typing — and never while a score field is focused, so we don't tear down
+  // the input mid-entry. This replaces the old per-blur full re-render.
+  function scheduleScorecardRefresh() {
+    clearTimeout(window.__scRefresh);
+    window.__scRefresh = setTimeout(() => {
+      const ae = document.activeElement;
+      if (ae && ae.classList && ae.classList.contains("sc-input")) {
+        scheduleScorecardRefresh();  // still entering — wait
+        return;
+      }
+      const view = document.getElementById("view");
+      if (view && ui.activeRoundId === roundId) renderRoundDetail(view);
+    }, 700);
+  }
+
   wrap.querySelectorAll(".sc-input").forEach(inp => {
     inp.addEventListener("input", (e) => {
-      const val = e.target.value === "" ? null : parseInt(e.target.value, 10);
+      const raw = e.target.value;
+      const val = raw === "" ? null : parseInt(raw, 10);
       if (val != null && (isNaN(val) || val < 1)) return;
       const h = parseInt(e.target.dataset.hole, 10);
+      const rd = liveRound();
+      const par = rd.holes[h].par;
       if (e.target.dataset.player != null) {
-        const p = parseInt(e.target.dataset.player, 10);
-        round.scores["p"+p][h] = val;
+        rd.scores["p"+parseInt(e.target.dataset.player, 10)][h] = val;
       } else {
-        const t = e.target.dataset.team;
-        round.teamScores["t"+t][h] = val;
+        rd.teamScores["t"+e.target.dataset.team][h] = val;
       }
+      // Recolor this one cell immediately without rebuilding any inputs.
+      e.target.className = "sc-input " + scoreClass(val, par);
       saveState();
-    });
-    inp.addEventListener("blur", () => {
-      const view = document.getElementById("view");
-      renderRoundDetail(view);
+      scheduleScorecardRefresh();
     });
   });
 
@@ -1631,18 +1653,33 @@ function applyRemote(row) {
     return;
   }
   if (row.rev <= SYNC.rev) return;                                 // stale or already seen
+  // If the user is mid-entry in a score field, do NOT swap state out from under
+  // them — that orphans the value they're typing and it appears to "erase."
+  // Defer the whole adoption until they leave the field; pollRemote re-fetches
+  // the latest every 20s, so nothing is lost.
+  const ae = document.activeElement;
+  if (ae && ae.classList && ae.classList.contains("sc-input")) {
+    SYNC.pendingRender = true;
+    return;
+  }
   SYNC.rev = row.rev;
   persistSyncMeta();
   state = row.data;
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
-  const ae = document.activeElement;
-  const typing = ae && (ae.tagName === "INPUT" || ae.tagName === "SELECT" || ae.tagName === "TEXTAREA");
-  if (typing) SYNC.pendingRender = true;                           // don't yank the keyboard mid-entry
-  else render();
+  render();
 }
 
 document.addEventListener("focusout", () => {
-  if (SYNC.pendingRender) { SYNC.pendingRender = false; setTimeout(render, 50); }
+  // Once the user is done entering a score, catch up to any remote changes that
+  // arrived while they were typing.
+  setTimeout(() => {
+    const ae = document.activeElement;
+    if (ae && ae.classList && ae.classList.contains("sc-input")) return;  // moved to next field
+    if (SYNC.pendingRender) {
+      SYNC.pendingRender = false;
+      if (typeof pollRemote === "function") pollRemote(); else render();
+    }
+  }, 80);
 });
 
 async function pollRemote() {

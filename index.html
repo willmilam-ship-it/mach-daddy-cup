@@ -263,6 +263,15 @@
     min-width: 36px; text-align: right;
   }
   .tee-ch small { display: block; color: #6f7a62; font-weight: 500; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .hi-input {
+    width: 48px; padding: 2px 4px; font-size: 12px; font-family: inherit;
+    border: 1px solid #d8d2bd; border-radius: 5px; background: #fff; color: #1f2a1a;
+  }
+  .hi-input.adj { border-color: #8a5a12; background: #fff7e8; color: #8a5a12; font-weight: 700; }
+  .hi-reset {
+    border: 0; background: transparent; color: #8a5a12; cursor: pointer;
+    font-size: 13px; line-height: 1; padding: 0 2px; vertical-align: middle;
+  }
   .bulk-bar {
     display: flex; gap: 6px; margin-top: 10px;
     padding-top: 10px; border-top: 1px solid #f0ecdf;
@@ -424,6 +433,8 @@ function buildDefaultRounds() {
       teamScores: { t1:Array(18).fill(null), t2:Array(18).fill(null) },
       // Each player's tee selection for this round (index into course.tees)
       tees: { p0: c.defaultTee, p1: c.defaultTee, p2: c.defaultTee, p3: c.defaultTee },
+      // Per-round Handicap Index override (null = use the player's global HI)
+      hiOverride: { p0: null, p1: null, p2: null, p3: null },
       status: "upcoming"
     };
   });
@@ -476,6 +487,8 @@ function loadState() {
         const c = DEFAULT_COURSES[r.course];
         r.tees = { p0: c.defaultTee, p1: c.defaultTee, p2: c.defaultTee, p3: c.defaultTee };
       }
+      // Per-round Handicap Index override (added Jun 2026; null = use global HI)
+      if (!r.hiOverride) r.hiOverride = { p0: null, p1: null, p2: null, p3: null };
       // Remove old handicapOverrides if present
       if (r.handicapOverrides) delete r.handicapOverrides;
       // v5 -> v6 migration: Castle Stuart tees reordered
@@ -575,7 +588,7 @@ function playerTeeForRound(round, playerIdx) {
 function effectiveCourseHandicap(round, playerIdx) {
   const course = DEFAULT_COURSES[round.course];
   const tee = playerTeeForRound(round, playerIdx);
-  const hi = state.players[playerIdx].handicapIndex || 0;
+  const hi = (round.hiOverride?.["p"+playerIdx] ?? state.players[playerIdx].handicapIndex) || 0;
   // If the tee defines its own par (e.g. Fortrose Yellows/Reds at par 70 vs Blacks/Whites at par 71), use it.
   const par = tee.par ?? course.par;
   return courseHandicap(hi, tee, par);
@@ -633,9 +646,12 @@ function computeRound(round) {
     if (fmt.mode === "individual") {
       for (let p = 0; p < 4; p++) {
         const gross = round.scores["p"+p][h];
-        const strokes = strokesOnHole(adjustedCH[p], si);
-        const net = gross != null ? gross - strokes : null;
-        const pts = stablefordPoints(gross, par, strokes);
+        // Match play uses strokes relative to the low man in the group; Stableford
+        // uses each player's full (gross) course handicap.
+        const matchStrokes = strokesOnHole(adjustedCH[p], si);
+        const nominalStrokes = strokesOnHole(CH[p], si);
+        const net = gross != null ? gross - matchStrokes : null;
+        const pts = stablefordPoints(gross, par, nominalStrokes);
         holeData.playerGross[p] = gross;
         holeData.playerNet[p] = net;
         holeData.playerPoints[p] = pts;
@@ -1075,7 +1091,7 @@ function renderRoundDetail(view) {
   const teesCard = el("div", "card");
   teesCard.innerHTML = `
     <h2>Tees & Course Handicaps</h2>
-    <div class="muted" style="margin-bottom:8px;">Pick each player's tees before the round. Course Handicap = round(HI × Slope ÷ 113 + (Rating − Par)).</div>
+    <div class="muted" style="margin-bottom:8px;">Pick each player's tees and tweak HI for this round if needed. Course Handicap = round(HI × Slope ÷ 113 + (Rating − Par)).</div>
     <div id="teesList"></div>
     <div class="bulk-bar">
       <span class="muted">Set all to:</span>
@@ -1088,10 +1104,15 @@ function renderRoundDetail(view) {
     const teeIdx = round.tees["p"+i] ?? course.defaultTee;
     const tee = course.tees[teeIdx];
     const ch = effectiveCourseHandicap(round, i);
+    const ovr = round.hiOverride?.["p"+i];
+    const effHI = ovr != null ? ovr : p.handicapIndex;
+    const isAdj = ovr != null;
     const row = el("div", "tee-row");
     row.innerHTML = `
       <div class="tee-dot" style="background:${p.color}"></div>
-      <div class="tee-player">${escapeHtml(p.name)} <small>HI ${p.handicapIndex}</small></div>
+      <div class="tee-player">${escapeHtml(p.name)}
+        <small>HI <input type="number" inputmode="decimal" step="0.1" class="hi-input${isAdj ? " adj" : ""}" data-player="${i}" value="${effHI}" />${isAdj ? `<button class="hi-reset" data-player="${i}" title="Reset to ${p.handicapIndex}">↺</button>` : ""}</small>
+      </div>
       <select class="tee-select" data-player="${i}">
         ${course.tees.map((t, idx) => `<option value="${idx}" ${idx===teeIdx?"selected":""}>${escapeHtml(t.name)} (${t.rating}/${t.slope})</option>`).join("")}
       </select>
@@ -1114,6 +1135,27 @@ function renderRoundDetail(view) {
       saveState();
       renderRoundDetail(view);
       toast(`All to ${course.tees[idx].name}`);
+    };
+  });
+  teesList.querySelectorAll("input.hi-input").forEach(inp => {
+    inp.addEventListener("change", (e) => {
+      const i = parseInt(e.target.dataset.player, 10);
+      const raw = e.target.value.trim();
+      const val = raw === "" ? null : parseFloat(raw);
+      if (!round.hiOverride) round.hiOverride = { p0:null, p1:null, p2:null, p3:null };
+      // Blank, invalid, or equal to the player's global HI clears the override
+      round.hiOverride["p"+i] = (val == null || isNaN(val) || val === state.players[i].handicapIndex) ? null : val;
+      saveState();
+      renderRoundDetail(view);
+    });
+  });
+  teesList.querySelectorAll("button.hi-reset").forEach(btn => {
+    btn.onclick = () => {
+      const i = parseInt(btn.dataset.player, 10);
+      if (round.hiOverride) round.hiOverride["p"+i] = null;
+      saveState();
+      renderRoundDetail(view);
+      toast(`${state.players[i].name} HI reset`);
     };
   });
 
